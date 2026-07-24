@@ -1,0 +1,54 @@
+{
+  "events" : [
+    {
+      "action" : "button",
+      "id" : "2FD15A56-CB5E-4246-B3E7-7E9FAC9A3954",
+      "succeeded" : true,
+      "summary" : "0xC:0x40:up",
+      "timestamp" : "2026-07-18T11:03:24Z"
+    },
+    {
+      "action" : "interactive",
+      "id" : "F7A22D9E-6A74-4A1C-9738-2AAE55ED0D4F",
+      "succeeded" : true,
+      "summary" : "interactive",
+      "timestamp" : "2026-07-18T11:03:24Z"
+    },
+    {
+      "action" : "button",
+      "id" : "19FA19BD-06A8-4F7A-9BBA-AA7ADF96B86F",
+      "succeeded" : true,
+      "summary" : "home",
+      "timestamp" : "2026-07-18T11:03:24Z"
+    },
+    {
+      "action" : "button",
+      "id" : "604F62CB-A3F7-4462-9D67-8480EFD4EF38",
+      "succeeded" : true,
+      "summary" : "0xC:0x30:up",
+      "timestamp" : "2026-07-18T11:03:24Z"
+    },
+    {
+      "action" : "interactive",
+      "id" : "9D1BBD59-BC2F-4F3C-A654-A94AF11B01F6",
+      "succeeded" : true,
+      "summary" : "interactive",
+      "timestamp" : "2026-07-18T11:03:24Z"
+    },
+    {
+      "action" : "button",
+      "id" : "2B7D8AA9-C946-4F4F-86F2-4C000600E266",
+      "succeeded" : true,
+      "summary" : "lock",
+      "timestamp" : "2026-07-18T11:03:24Z"
+    },
+    {
+      "action" : "rotate",
+      "id" : "D4596451-9C6C-428D-9959-FC48B77E0640",
+      "succeeded" : true,
+      "summary" : "portrait",
+      "timestamp" : "2026-07-18T10:58:36Z"
+    }
+  ],
+  "surface_ref" : "surface:6"
+}

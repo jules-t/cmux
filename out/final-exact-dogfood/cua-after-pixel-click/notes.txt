@@ -1,0 +1,6 @@
+id=cmux-DEV-sim785---Simulator-20260718-004413-5d298b
+host=local
+mode=window
+target=cmux DEV sim785 - Simulator
+method=native
+local_file=out/final-exact-dogfood/cua-after-pixel-click/screenshot.png

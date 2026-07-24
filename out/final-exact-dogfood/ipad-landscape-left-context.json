@@ -1,0 +1,13 @@
+{
+  "device_name" : "cmux-simfg-ipad",
+  "device_type_id" : "com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB",
+  "display_height" : 2752,
+  "display_scale" : 1,
+  "display_width" : 2064,
+  "family" : "iPad",
+  "orientation" : "landscape_left",
+  "runtime_id" : "com.apple.CoreSimulator.SimRuntime.iOS-26-5",
+  "simulator_id" : "AC2C01F6-E504-476C-82CE-FE759D96F403",
+  "state" : "Booted",
+  "surface_ref" : "surface:2"
+}

@@ -1,0 +1,44 @@
+{
+  "id": "cmux-DEV-sim785---Simulator-20260718-004221-ac4f3e",
+  "status": "complete",
+  "mode": "window",
+  "host": "local",
+  "target": "cmux DEV sim785 - Simulator",
+  "capturedAt": "2026-07-18T07:42:22Z",
+  "remoteFile": "/tmp/cua-ssh-screenshot-cmux-DEV-sim785---Simulator-20260718-004221-ac4f3e.png",
+  "remoteLog": "/tmp/cua-ssh-screenshot-cmux-DEV-sim785---Simulator-20260718-004221-ac4f3e.log",
+  "method": "native",
+  "localDir": "out/final-exact-dogfood/cua-portrait",
+  "localFile": "out/final-exact-dogfood/cua-portrait/screenshot.png",
+  "window": {
+    "index": 45,
+    "order": 45,
+    "id": 11574,
+    "pid": 96004,
+    "owner": "cmux DEV sim785",
+    "title": "Simulator",
+    "layer": 0,
+    "alpha": 1,
+    "bounds": {
+      "x": 0,
+      "y": 356,
+      "width": 1728,
+      "height": 1084
+    }
+  },
+  "command": [
+    "/usr/sbin/screencapture",
+    "-x",
+    "-l",
+    "11574",
+    "/tmp/cua-ssh-screenshot-cmux-DEV-sim785---Simulator-20260718-004221-ac4f3e.png"
+  ],
+  "artifacts": {
+    "localFile": "out/final-exact-dogfood/cua-portrait/screenshot.png",
+    "metaPath": "out/final-exact-dogfood/cua-portrait/meta.json",
+    "artifactsPath": "out/final-exact-dogfood/cua-portrait/artifacts.json",
+    "notesPath": "out/final-exact-dogfood/cua-portrait/notes.txt",
+    "imageWidth": 3680,
+    "imageHeight": 2392
+  }
+}

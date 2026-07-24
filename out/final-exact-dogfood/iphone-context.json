@@ -1,0 +1,14 @@
+{
+  "device_name" : "cmux-simfg-iphone",
+  "device_type_id" : "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+  "display_height" : 2622,
+  "display_scale" : 1,
+  "display_width" : 1206,
+  "family" : "iPhone",
+  "orientation" : "portrait",
+  "runtime_id" : "com.apple.CoreSimulator.SimRuntime.iOS-26-5",
+  "simulator_id" : "CD13E0F0-89F6-4299-9317-12C2D28F403D",
+  "state" : "Booted",
+  "surface_id" : "0ECDF099-581F-4787-A99A-359ACEB534E0",
+  "surface_ref" : "surface:2"
+}

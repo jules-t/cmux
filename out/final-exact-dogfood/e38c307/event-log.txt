@@ -1,0 +1,60 @@
+2026-07-18T12:13:36Z	pointer	touch 0.500,0.500→0.500,0.500 cancelled
+2026-07-18T12:13:36Z	interactive	interactive
+2026-07-18T12:13:36Z	gesture	events:2
+2026-07-18T12:13:36Z	rotate	portrait
+2026-07-18T12:13:33Z	pointer	touch 0.500,0.500→0.500,0.500 cancelled
+2026-07-18T12:13:33Z	interactive	interactive
+2026-07-18T12:13:33Z	gesture	events:2
+2026-07-18T12:13:33Z	rotate	portrait
+2026-07-18T12:13:29Z	pointer	touch 0.500,0.500→0.500,0.500 cancelled
+2026-07-18T12:13:29Z	interactive	interactive
+2026-07-18T12:13:29Z	gesture	events:2
+2026-07-18T12:13:29Z	rotate	portrait
+2026-07-18T12:13:06Z	interactive	interactive
+2026-07-18T12:13:05Z	memory_warning	simulate
+2026-07-18T12:13:05Z	pointer	touch 0.500,0.250→0.500,0.250 cancelled
+2026-07-18T12:13:05Z	interactive	interactive
+2026-07-18T12:13:04Z	gesture	events:25
+2026-07-18T12:13:04Z	button	0xC:0x30:up
+2026-07-18T12:13:04Z	interactive	interactive
+2026-07-18T12:13:04Z	button	lock
+2026-07-18T12:13:04Z	button	0xC:0x30:up
+2026-07-18T12:13:04Z	interactive	interactive
+2026-07-18T12:13:04Z	button	lock
+2026-07-18T12:13:03Z	button	0xC:0x40:up
+2026-07-18T12:13:03Z	interactive	interactive
+2026-07-18T12:13:03Z	button	home
+2026-07-18T12:13:03Z	interactive	interactive
+2026-07-18T12:13:03Z	button	appSwitcher
+2026-07-18T12:13:03Z	rotate	portrait
+2026-07-18T12:13:03Z	interactive	interactive
+2026-07-18T12:13:03Z	pointer	touch 0.500,0.500→0.500,0.500 cancelled
+2026-07-18T12:13:03Z	interactive	interactive
+2026-07-18T12:13:03Z	gesture	events:2
+2026-07-18T12:13:02Z	rotate	portrait_upside_down
+2026-07-18T12:13:02Z	interactive	interactive
+2026-07-18T12:13:02Z	pointer	touch 0.500,0.750→0.500,0.750 cancelled
+2026-07-18T12:13:02Z	interactive	interactive
+2026-07-18T12:13:02Z	gesture	events:2
+2026-07-18T12:13:02Z	rotate	landscape_right
+2026-07-18T12:13:02Z	interactive	interactive
+2026-07-18T12:13:02Z	pointer	touch 0.500,0.750→0.500,0.750 cancelled
+2026-07-18T12:13:02Z	interactive	interactive
+2026-07-18T12:13:02Z	gesture	events:2
+2026-07-18T12:13:01Z	rotate	landscape_left
+2026-07-18T12:13:01Z	interactive	interactive
+2026-07-18T12:13:01Z	pointer	touch 0.800,0.250→0.800,0.250 cancelled
+2026-07-18T12:13:01Z	interactive	interactive
+2026-07-18T12:13:01Z	gesture	events:25
+2026-07-18T12:13:00Z	pointer	touch 0.800,0.800→0.800,0.800 cancelled
+2026-07-18T12:13:00Z	interactive	interactive
+2026-07-18T12:13:00Z	gesture	events:2
+2026-07-18T12:13:00Z	pointer	touch 0.200,0.200→0.200,0.200 cancelled
+2026-07-18T12:13:00Z	interactive	interactive
+2026-07-18T12:13:00Z	gesture	events:2
+2026-07-18T12:13:00Z	interactive	interactive
+2026-07-18T12:13:00Z	rotate	portrait
+2026-07-18T12:11:18Z	pointer	touch 0.500,0.500→0.500,0.500 cancelled
+2026-07-18T12:11:18Z	interactive	interactive
+2026-07-18T12:11:18Z	gesture	events:2
+2026-07-18T12:11:07Z	rotate	portrait
