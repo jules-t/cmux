@@ -1,0 +1,6 @@
+id=cmux-DEV-sim785---Simulator-20260718-004252-a92656
+host=local
+mode=window
+target=cmux DEV sim785 - Simulator
+method=native
+local_file=out/final-exact-dogfood/cua-landscape-left/screenshot.png

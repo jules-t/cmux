@@ -1,0 +1,658 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild build-for-testing -project cmux.xcodeproj -scheme cmux -configuration Debug -derivedDataPath /tmp/cmux-simrv "-only-testing:cmuxTests/SimulatorPanelIntegrationTests" CODE_SIGNING_ALLOWED=NO
+
+Build settings from command line:
+    CODE_SIGNING_ALLOWED = NO
+
+Resolve Package Graph
+
+Fetching from https://github.com/PostHog/posthog-ios.git (cached)
+
+Fetching from https://github.com/gonzalezreal/swift-markdown-ui (cached)
+
+Fetching from https://github.com/tuist/XcodeProj.git (cached)
+
+Fetching from https://github.com/manaflow-ai/iroh-ffi.git (cached)
+
+Fetching from https://github.com/swiftlang/swift-cmark (cached)
+
+Fetching from https://github.com/kylef/Spectre.git (cached)
+
+Fetching from https://github.com/apple/swift-crypto.git (cached)
+
+Fetching from https://github.com/sparkle-project/Sparkle (cached)
+
+Fetching from https://github.com/gonzalezreal/NetworkImage (cached)
+
+Fetching from https://github.com/swiftlang/swift-syntax.git (cached)
+
+Fetching from https://github.com/apple/swift-asn1.git (cached)
+
+Fetching from https://github.com/tadija/AEXML.git (cached)
+
+Fetching from https://github.com/getsentry/sentry-cocoa.git (cached)
+
+Fetching from https://github.com/kylef/PathKit.git (cached)
+
+Creating working copy of package ‘NetworkImage’
+
+Checking out 6.0.1 of package ‘NetworkImage’
+
+Creating working copy of package ‘AEXML’
+
+Checking out 4.7.0 of package ‘AEXML’
+
+Creating working copy of package ‘swift-cmark’
+
+Checking out 0.7.1 of package ‘swift-cmark’
+
+Creating working copy of package ‘swift-asn1’
+
+Checking out 1.7.1 of package ‘swift-asn1’
+
+Creating working copy of package ‘PathKit’
+
+Checking out 1.0.1 of package ‘PathKit’
+
+Creating working copy of package ‘Spectre’
+
+Checking out 0.10.1 of package ‘Spectre’
+
+Creating working copy of package ‘swift-markdown-ui’
+
+Checking out 2.4.1 of package ‘swift-markdown-ui’
+
+Creating working copy of package ‘swift-crypto’
+
+Checking out 3.15.1 of package ‘swift-crypto’
+
+Creating working copy of package ‘iroh-ffi’
+
+Checking out 1.0.2-cmux.1 of package ‘iroh-ffi’
+
+Creating working copy of package ‘Sparkle’
+
+Checking out 2.9.3 of package ‘Sparkle’
+
+Creating working copy of package ‘swift-syntax’
+
+Checking out 600.0.1 of package ‘swift-syntax’
+
+Creating working copy of package ‘XcodeProj’
+
+Checking out 9.13.0 of package ‘XcodeProj’
+
+Creating working copy of package ‘sentry-cocoa’
+
+Checking out 9.3.0 of package ‘sentry-cocoa’
+
+Creating working copy of package ‘posthog-ios’
+
+Checking out 3.41.0 of package ‘posthog-ios’
+
+
+Resolved source packages:
+  CMUXAgentLaunch: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CMUXAgentLaunch @ local
+  swift-markdown-ui: https://github.com/gonzalezreal/swift-markdown-ui @ 2.4.1
+  CmuxSettingsUI: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxSettingsUI @ local
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.1
+  CMUXProjectModel: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CMUXProjectModel @ local
+  AEXML: https://github.com/tadija/AEXML.git @ 4.7.0
+  CmuxWindowing: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxWindowing @ local
+  CmuxSidebarGit: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxSidebarGit @ local
+  Sentry: https://github.com/getsentry/sentry-cocoa.git @ 9.3.0
+  CmuxMobileTransport: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/iOS/CmuxMobileTransport @ local
+  CmuxAuthRuntime: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/Shared/CmuxAuthRuntime @ local
+  StackAuth: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/vendor/stack-auth-swift-sdk-prerelease @ local
+  CmuxWorkspaces: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxWorkspaces @ local
+  PostHog: https://github.com/PostHog/posthog-ios.git @ 3.41.0
+  CmuxSwiftRenderUI: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxSwiftRenderUI @ local
+  Spectre: https://github.com/kylef/Spectre.git @ 0.10.1
+  CMUXAuthCore: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/Shared/CMUXAuthCore @ local
+  cmark-gfm: https://github.com/swiftlang/swift-cmark @ 0.7.1
+  CmuxRemoteDaemon: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxRemoteDaemon @ local
+  CmuxFoundation: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxFoundation @ local
+  CmuxGit: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxGit @ local
+  Sparkle: https://github.com/sparkle-project/Sparkle @ 2.9.3
+  NetworkImage: https://github.com/gonzalezreal/NetworkImage @ 6.0.1
+  CmuxSettings: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxSettings @ local
+  CmuxTerminal: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxTerminal @ local
+  CmuxUpdaterUI: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxUpdaterUI @ local
+  CmuxAppKitSupportUI: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxAppKitSupportUI @ local
+  CmuxPanes: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxPanes @ local
+  CmuxMobileRPC: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/iOS/CmuxMobileRPC @ local
+  CmuxExtensionSidebarExamples: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Examples/CmuxExtensionSidebarExamples @ local
+  CmuxTerminalCore: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxTerminalCore @ local
+  CmuxSidebarProviderKit: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxSidebarProviderKit @ local
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 3.15.1
+  Bonsplit: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/vendor/bonsplit @ local
+  CmuxNotifications: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxNotifications @ local
+  CmuxBrowser: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxBrowser @ local
+  CmuxExtensionKit: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxExtensionKit @ local
+  CmuxSidebar: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxSidebar @ local
+  CmuxIrohTransport: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/Shared/CmuxIrohTransport @ local
+  CmuxControlSocket: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxControlSocket @ local
+  CmuxCanvas: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxCanvas @ local
+  CmuxSidebarInterpreterService: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxSidebarInterpreterService @ local
+  CmuxCanvasUI: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxCanvasUI @ local
+  CmuxRemoteWorkspace: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxRemoteWorkspace @ local
+  CmuxCommandPalette: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxCommandPalette @ local
+  CmuxSwiftRender: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxSwiftRender @ local
+  CmuxTestSupport: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxTestSupport @ local
+  PathKit: https://github.com/kylef/PathKit.git @ 1.0.1
+  CmuxSimulator: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxSimulator @ local
+  CMUXMobileCore: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/Shared/CMUXMobileCore @ local
+  CmuxAgentChat: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/Shared/CmuxAgentChat @ local
+  IrohLib: https://github.com/manaflow-ai/iroh-ffi.git @ 1.0.2-cmux.1
+  XcodeProj: https://github.com/tuist/XcodeProj.git @ 9.13.0
+  CMUXDebugLog: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CMUXDebugLog @ local
+  CmuxRemoteSession: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxRemoteSession @ local
+  CmuxMobileShellModel: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/iOS/CmuxMobileShellModel @ local
+  CmuxUpdater: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxUpdater @ local
+  CmuxCore: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxCore @ local
+  CmuxMobileSupport: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/iOS/CmuxMobileSupport @ local
+  CmuxFeedback: /Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane/Packages/macOS/CmuxFeedback @ local
+  swift-syntax: https://github.com/swiftlang/swift-syntax.git @ 600.0.1
+
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+{ platform:macOS, arch:arm64, id:00006050-000128900A31401C, name:My Mac }
+{ platform:macOS, arch:x86_64, id:00006050-000128900A31401C, name:My Mac }
+{ platform:macOS, name:Any Mac }
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (142 targets)
+    Target 'cmuxUITests' in project 'cmux'
+        ➜ Explicit dependency on target 'cmux' in project 'cmux'
+    Target 'cmux' in project 'cmux'
+        ➜ Explicit dependency on target 'cmux-cli' in project 'cmux'
+        ➜ Explicit dependency on target 'CmuxDockTilePlugin' in project 'cmux'
+        ➜ Explicit dependency on target 'CMUXDebugLog' in project 'CMUXDebugLog'
+        ➜ Explicit dependency on target 'Bonsplit' in project 'Bonsplit'
+        ➜ Explicit dependency on target 'CmuxAgentChat' in project 'CmuxAgentChat'
+        ➜ Explicit dependency on target 'CMUXAgentLaunch' in project 'CMUXAgentLaunch'
+        ➜ Explicit dependency on target 'CmuxAppKitSupportUI' in project 'CmuxAppKitSupportUI'
+        ➜ Explicit dependency on target 'CMUXAuthCore' in project 'CMUXAuthCore'
+        ➜ Explicit dependency on target 'CmuxAuthRuntime' in project 'CmuxAuthRuntime'
+        ➜ Explicit dependency on target 'CmuxBrowser' in project 'CmuxBrowser'
+        ➜ Explicit dependency on target 'CmuxCanvas' in project 'CmuxCanvas'
+        ➜ Explicit dependency on target 'CmuxCanvasUI' in project 'CmuxCanvasUI'
+        ➜ Explicit dependency on target 'CmuxCommandPalette' in project 'CmuxCommandPalette'
+        ➜ Explicit dependency on target 'CmuxControlSocket' in project 'CmuxControlSocket'
+        ➜ Explicit dependency on target 'CmuxCore' in project 'CmuxCore'
+        ➜ Explicit dependency on target 'CmuxExtensionKit' in project 'CmuxExtensionKit'
+        ➜ Explicit dependency on target 'CmuxExtensionSidebarExamples' in project 'CmuxExtensionSidebarExamples'
+        ➜ Explicit dependency on target 'CmuxFeedback' in project 'CmuxFeedback'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxGit' in project 'CmuxGit'
+        ➜ Explicit dependency on target 'CmuxIrohTransport' in project 'CmuxIrohTransport'
+        ➜ Explicit dependency on target 'CMUXMobileCore' in project 'CMUXMobileCore'
+        ➜ Explicit dependency on target 'CmuxMobileTransport' in project 'CmuxMobileTransport'
+        ➜ Explicit dependency on target 'CmuxNotifications' in project 'CmuxNotifications'
+        ➜ Explicit dependency on target 'CmuxPanes' in project 'CmuxPanes'
+        ➜ Explicit dependency on target 'CMUXProjectModel' in project 'CMUXProjectModel'
+        ➜ Explicit dependency on target 'CmuxRemoteDaemon' in project 'CmuxRemoteDaemon'
+        ➜ Explicit dependency on target 'CmuxRemoteSession' in project 'CmuxRemoteSession'
+        ➜ Explicit dependency on target 'CmuxRemoteWorkspace' in project 'CmuxRemoteWorkspace'
+        ➜ Explicit dependency on target 'CmuxSettings' in project 'CmuxSettings'
+        ➜ Explicit dependency on target 'CmuxSettingsUI' in project 'CmuxSettingsUI'
+        ➜ Explicit dependency on target 'CmuxSidebar' in project 'CmuxSidebar'
+        ➜ Explicit dependency on target 'CmuxSidebarGit' in project 'CmuxSidebarGit'
+        ➜ Explicit dependency on target 'CmuxSidebarInterpreterClient' in project 'CmuxSidebarInterpreterService'
+        ➜ Explicit dependency on target 'CmuxSidebarProviderKit' in project 'CmuxSidebarProviderKit'
+        ➜ Explicit dependency on target 'CmuxSidebarRemoteRender' in project 'CmuxSidebarInterpreterService'
+        ➜ Explicit dependency on target 'CmuxSimulator' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSimulatorUI' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSimulatorWorker' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSwiftRender' in project 'CmuxSwiftRender'
+        ➜ Explicit dependency on target 'CmuxSwiftRenderUI' in project 'CmuxSwiftRenderUI'
+        ➜ Explicit dependency on target 'CmuxTerminal' in project 'CmuxTerminal'
+        ➜ Explicit dependency on target 'CmuxTerminalCore' in project 'CmuxTerminalCore'
+        ➜ Explicit dependency on target 'CmuxTestSupport' in project 'CmuxTestSupport'
+        ➜ Explicit dependency on target 'CmuxUpdater' in project 'CmuxUpdater'
+        ➜ Explicit dependency on target 'CmuxUpdaterUI' in project 'CmuxUpdaterUI'
+        ➜ Explicit dependency on target 'CmuxWindowing' in project 'CmuxWindowing'
+        ➜ Explicit dependency on target 'CmuxWorkspaces' in project 'CmuxWorkspaces'
+        ➜ Explicit dependency on target 'MarkdownUI' in project 'swift-markdown-ui'
+        ➜ Explicit dependency on target 'PostHog' in project 'PostHog'
+        ➜ Explicit dependency on target 'Sentry' in project 'Sentry'
+        ➜ Explicit dependency on target 'Sparkle' in project 'Sparkle'
+        ➜ Explicit dependency on target 'StackAuth' in project 'StackAuth'
+    Target 'PostHog' in project 'PostHog'
+        ➜ Explicit dependency on target 'PostHog' in project 'PostHog'
+        ➜ Explicit dependency on target 'PostHog_PostHog' in project 'PostHog'
+        ➜ Explicit dependency on target 'phlibwebp' in project 'PostHog'
+    Target 'PostHog' in project 'PostHog'
+        ➜ Explicit dependency on target 'PostHog_PostHog' in project 'PostHog'
+        ➜ Explicit dependency on target 'phlibwebp' in project 'PostHog'
+    Target 'phlibwebp' in project 'PostHog' (no dependencies)
+    Target 'PostHog_PostHog' in project 'PostHog' (no dependencies)
+    Target 'MarkdownUI' in project 'swift-markdown-ui'
+        ➜ Explicit dependency on target 'MarkdownUI' in project 'swift-markdown-ui'
+        ➜ Explicit dependency on target 'cmark-gfm' in project 'cmark-gfm'
+        ➜ Explicit dependency on target 'cmark-gfm-extensions' in project 'cmark-gfm'
+        ➜ Explicit dependency on target 'NetworkImage' in project 'NetworkImage'
+    Target 'MarkdownUI' in project 'swift-markdown-ui'
+        ➜ Explicit dependency on target 'cmark-gfm' in project 'cmark-gfm'
+        ➜ Explicit dependency on target 'cmark-gfm-extensions' in project 'cmark-gfm'
+        ➜ Explicit dependency on target 'NetworkImage' in project 'NetworkImage'
+    Target 'NetworkImage' in project 'NetworkImage'
+        ➜ Explicit dependency on target 'NetworkImage' in project 'NetworkImage'
+    Target 'NetworkImage' in project 'NetworkImage' (no dependencies)
+    Target 'cmark-gfm-extensions' in project 'cmark-gfm'
+        ➜ Explicit dependency on target 'cmark-gfm-extensions' in project 'cmark-gfm'
+        ➜ Explicit dependency on target 'cmark-gfm' in project 'cmark-gfm'
+    Target 'cmark-gfm-extensions' in project 'cmark-gfm'
+        ➜ Explicit dependency on target 'cmark-gfm' in project 'cmark-gfm'
+    Target 'cmark-gfm' in project 'cmark-gfm'
+        ➜ Explicit dependency on target 'cmark-gfm' in project 'cmark-gfm'
+    Target 'cmark-gfm' in project 'cmark-gfm' (no dependencies)
+    Target 'CmuxWindowing' in project 'CmuxWindowing'
+        ➜ Explicit dependency on target 'CmuxWindowing' in project 'CmuxWindowing'
+    Target 'CmuxWindowing' in project 'CmuxWindowing' (no dependencies)
+    Target 'CmuxUpdaterUI' in project 'CmuxUpdaterUI'
+        ➜ Explicit dependency on target 'CmuxUpdaterUI' in project 'CmuxUpdaterUI'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxUpdater' in project 'CmuxUpdater'
+        ➜ Explicit dependency on target 'Sparkle' in project 'Sparkle'
+    Target 'CmuxUpdaterUI' in project 'CmuxUpdaterUI'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxUpdater' in project 'CmuxUpdater'
+        ➜ Explicit dependency on target 'Sparkle' in project 'Sparkle'
+    Target 'CmuxUpdater' in project 'CmuxUpdater'
+        ➜ Explicit dependency on target 'CmuxUpdater' in project 'CmuxUpdater'
+        ➜ Explicit dependency on target 'Sparkle' in project 'Sparkle'
+    Target 'CmuxUpdater' in project 'CmuxUpdater'
+        ➜ Explicit dependency on target 'Sparkle' in project 'Sparkle'
+    Target 'Sparkle' in project 'Sparkle' (no dependencies)
+    Target 'CmuxTerminal' in project 'CmuxTerminal'
+        ➜ Explicit dependency on target 'CmuxTerminal' in project 'CmuxTerminal'
+        ➜ Explicit dependency on target 'CmuxTerminalCore' in project 'CmuxTerminalCore'
+        ➜ Explicit dependency on target 'CmuxGhosttyKit' in project 'CmuxTerminalCore'
+        ➜ Explicit dependency on target 'CMUXDebugLog' in project 'CMUXDebugLog'
+        ➜ Explicit dependency on target 'CMUXAgentLaunch' in project 'CMUXAgentLaunch'
+        ➜ Explicit dependency on target 'CMUXMobileCore' in project 'CMUXMobileCore'
+        ➜ Explicit dependency on target 'Bonsplit' in project 'Bonsplit'
+    Target 'CmuxTerminal' in project 'CmuxTerminal'
+        ➜ Explicit dependency on target 'CmuxTerminalCore' in project 'CmuxTerminalCore'
+        ➜ Explicit dependency on target 'CmuxGhosttyKit' in project 'CmuxTerminalCore'
+        ➜ Explicit dependency on target 'CMUXDebugLog' in project 'CMUXDebugLog'
+        ➜ Explicit dependency on target 'CMUXAgentLaunch' in project 'CMUXAgentLaunch'
+        ➜ Explicit dependency on target 'CMUXMobileCore' in project 'CMUXMobileCore'
+        ➜ Explicit dependency on target 'Bonsplit' in project 'Bonsplit'
+    Target 'CmuxGhosttyKit' in project 'CmuxTerminalCore' (no dependencies)
+    Target 'CmuxTerminalCore' in project 'CmuxTerminalCore'
+        ➜ Explicit dependency on target 'CmuxTerminalCore' in project 'CmuxTerminalCore'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CMUXDebugLog' in project 'CMUXDebugLog'
+    Target 'CmuxTerminalCore' in project 'CmuxTerminalCore'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CMUXDebugLog' in project 'CMUXDebugLog'
+    Target 'CmuxSimulatorWorker' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSimulatorWorker' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSimulator_CmuxSimulatorWorker' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSimulatorSystem' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSimulator' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxSimulatorWorker' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSimulator_CmuxSimulatorWorker' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSimulatorSystem' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSimulator' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxSimulator_CmuxSimulatorWorker' in project 'CmuxSimulator' (no dependencies)
+    Target 'CmuxSimulatorUI' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSimulatorUI' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSimulatorSystem' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSimulator' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxSimulatorUI' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSimulatorSystem' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSimulator' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxSimulator' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSimulator' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSimulatorSystem' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxSimulator' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxSimulatorSystem' in project 'CmuxSimulator'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxSimulatorSystem' in project 'CmuxSimulator' (no dependencies)
+    Target 'CmuxSidebarRemoteRender' in project 'CmuxSidebarInterpreterService'
+        ➜ Explicit dependency on target 'CmuxSidebarRemoteRender' in project 'CmuxSidebarInterpreterService'
+        ➜ Explicit dependency on target 'CmuxSidebarInterpreterClient' in project 'CmuxSidebarInterpreterService'
+        ➜ Explicit dependency on target 'CmuxSwiftRender' in project 'CmuxSwiftRender'
+        ➜ Explicit dependency on target 'CmuxSwiftRenderUI' in project 'CmuxSwiftRenderUI'
+    Target 'CmuxSidebarRemoteRender' in project 'CmuxSidebarInterpreterService'
+        ➜ Explicit dependency on target 'CmuxSidebarInterpreterClient' in project 'CmuxSidebarInterpreterService'
+        ➜ Explicit dependency on target 'CmuxSwiftRender' in project 'CmuxSwiftRender'
+        ➜ Explicit dependency on target 'CmuxSwiftRenderUI' in project 'CmuxSwiftRenderUI'
+    Target 'CmuxSidebarGit' in project 'CmuxSidebarGit'
+        ➜ Explicit dependency on target 'CmuxSidebarGit' in project 'CmuxSidebarGit'
+        ➜ Explicit dependency on target 'CmuxGit' in project 'CmuxGit'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxSidebarGit' in project 'CmuxSidebarGit'
+        ➜ Explicit dependency on target 'CmuxGit' in project 'CmuxGit'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxSidebar' in project 'CmuxSidebar'
+        ➜ Explicit dependency on target 'CmuxSidebar' in project 'CmuxSidebar'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxSwiftRender' in project 'CmuxSwiftRender'
+        ➜ Explicit dependency on target 'CmuxExtensionKit' in project 'CmuxExtensionKit'
+    Target 'CmuxSidebar' in project 'CmuxSidebar'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxSwiftRender' in project 'CmuxSwiftRender'
+        ➜ Explicit dependency on target 'CmuxExtensionKit' in project 'CmuxExtensionKit'
+    Target 'CmuxSettingsUI' in project 'CmuxSettingsUI'
+        ➜ Explicit dependency on target 'CmuxSettingsUI' in project 'CmuxSettingsUI'
+        ➜ Explicit dependency on target 'CMUXMobileCore' in project 'CMUXMobileCore'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxSettings' in project 'CmuxSettings'
+    Target 'CmuxSettingsUI' in project 'CmuxSettingsUI'
+        ➜ Explicit dependency on target 'CMUXMobileCore' in project 'CMUXMobileCore'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxSettings' in project 'CmuxSettings'
+    Target 'CmuxRemoteSession' in project 'CmuxRemoteSession'
+        ➜ Explicit dependency on target 'CmuxRemoteSession' in project 'CmuxRemoteSession'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxCore' in project 'CmuxCore'
+        ➜ Explicit dependency on target 'CmuxRemoteDaemon' in project 'CmuxRemoteDaemon'
+        ➜ Explicit dependency on target 'CmuxRemoteWorkspace' in project 'CmuxRemoteWorkspace'
+        ➜ Explicit dependency on target 'CMUXDebugLog' in project 'CMUXDebugLog'
+    Target 'CmuxRemoteSession' in project 'CmuxRemoteSession'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxCore' in project 'CmuxCore'
+        ➜ Explicit dependency on target 'CmuxRemoteDaemon' in project 'CmuxRemoteDaemon'
+        ➜ Explicit dependency on target 'CmuxRemoteWorkspace' in project 'CmuxRemoteWorkspace'
+        ➜ Explicit dependency on target 'CMUXDebugLog' in project 'CMUXDebugLog'
+    Target 'CmuxRemoteWorkspace' in project 'CmuxRemoteWorkspace'
+        ➜ Explicit dependency on target 'CmuxRemoteWorkspace' in project 'CmuxRemoteWorkspace'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxCore' in project 'CmuxCore'
+        ➜ Explicit dependency on target 'CmuxRemoteDaemon' in project 'CmuxRemoteDaemon'
+        ➜ Explicit dependency on target 'CmuxSettings' in project 'CmuxSettings'
+    Target 'CmuxRemoteWorkspace' in project 'CmuxRemoteWorkspace'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxCore' in project 'CmuxCore'
+        ➜ Explicit dependency on target 'CmuxRemoteDaemon' in project 'CmuxRemoteDaemon'
+        ➜ Explicit dependency on target 'CmuxSettings' in project 'CmuxSettings'
+    Target 'CmuxRemoteDaemon' in project 'CmuxRemoteDaemon'
+        ➜ Explicit dependency on target 'CmuxRemoteDaemon' in project 'CmuxRemoteDaemon'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxCore' in project 'CmuxCore'
+    Target 'CmuxRemoteDaemon' in project 'CmuxRemoteDaemon'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxCore' in project 'CmuxCore'
+    Target 'CMUXProjectModel' in project 'CMUXProjectModel'
+        ➜ Explicit dependency on target 'CMUXProjectModel' in project 'CMUXProjectModel'
+        ➜ Explicit dependency on target 'XcodeProj' in project 'XcodeProj'
+    Target 'CMUXProjectModel' in project 'CMUXProjectModel'
+        ➜ Explicit dependency on target 'XcodeProj' in project 'XcodeProj'
+    Target 'XcodeProj' in project 'XcodeProj'
+        ➜ Explicit dependency on target 'XcodeProj' in project 'XcodeProj'
+        ➜ Explicit dependency on target 'PathKit' in project 'PathKit'
+        ➜ Explicit dependency on target 'AEXML' in project 'AEXML'
+    Target 'XcodeProj' in project 'XcodeProj'
+        ➜ Explicit dependency on target 'PathKit' in project 'PathKit'
+        ➜ Explicit dependency on target 'AEXML' in project 'AEXML'
+    Target 'AEXML' in project 'AEXML'
+        ➜ Explicit dependency on target 'AEXML' in project 'AEXML'
+    Target 'AEXML' in project 'AEXML' (no dependencies)
+    Target 'PathKit' in project 'PathKit'
+        ➜ Explicit dependency on target 'PathKit' in project 'PathKit'
+    Target 'PathKit' in project 'PathKit' (no dependencies)
+    Target 'CmuxPanes' in project 'CmuxPanes'
+        ➜ Explicit dependency on target 'CmuxPanes' in project 'CmuxPanes'
+        ➜ Explicit dependency on target 'Bonsplit' in project 'Bonsplit'
+    Target 'CmuxPanes' in project 'CmuxPanes'
+        ➜ Explicit dependency on target 'Bonsplit' in project 'Bonsplit'
+    Target 'CmuxNotifications' in project 'CmuxNotifications'
+        ➜ Explicit dependency on target 'CmuxNotifications' in project 'CmuxNotifications'
+    Target 'CmuxNotifications' in project 'CmuxNotifications' (no dependencies)
+    Target 'CmuxMobileTransport' in project 'CmuxMobileTransport'
+        ➜ Explicit dependency on target 'CmuxMobileTransport' in project 'CmuxMobileTransport'
+        ➜ Explicit dependency on target 'CMUXMobileCore' in project 'CMUXMobileCore'
+    Target 'CmuxMobileTransport' in project 'CmuxMobileTransport'
+        ➜ Explicit dependency on target 'CMUXMobileCore' in project 'CMUXMobileCore'
+    Target 'CmuxIrohTransport' in project 'CmuxIrohTransport'
+        ➜ Explicit dependency on target 'CmuxIrohTransport' in project 'CmuxIrohTransport'
+        ➜ Explicit dependency on target 'CMUXMobileCore' in project 'CMUXMobileCore'
+        ➜ Explicit dependency on target 'IrohLib' in project 'IrohLib'
+    Target 'CmuxIrohTransport' in project 'CmuxIrohTransport'
+        ➜ Explicit dependency on target 'CMUXMobileCore' in project 'CMUXMobileCore'
+        ➜ Explicit dependency on target 'IrohLib' in project 'IrohLib'
+    Target 'IrohLib' in project 'IrohLib'
+        ➜ Explicit dependency on target 'IrohLib' in project 'IrohLib'
+    Target 'IrohLib' in project 'IrohLib' (no dependencies)
+    Target 'CMUXMobileCore' in project 'CMUXMobileCore'
+        ➜ Explicit dependency on target 'CMUXMobileCore' in project 'CMUXMobileCore'
+    Target 'CMUXMobileCore' in project 'CMUXMobileCore' (no dependencies)
+    Target 'CmuxGit' in project 'CmuxGit'
+        ➜ Explicit dependency on target 'CmuxGit' in project 'CmuxGit'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxGit' in project 'CmuxGit'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxFeedback' in project 'CmuxFeedback'
+        ➜ Explicit dependency on target 'CmuxFeedback' in project 'CmuxFeedback'
+        ➜ Explicit dependency on target 'CmuxFeedback_CmuxFeedback' in project 'CmuxFeedback'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxFeedback' in project 'CmuxFeedback'
+        ➜ Explicit dependency on target 'CmuxFeedback_CmuxFeedback' in project 'CmuxFeedback'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxFeedback_CmuxFeedback' in project 'CmuxFeedback' (no dependencies)
+    Target 'CmuxExtensionSidebarExamples' in project 'CmuxExtensionSidebarExamples'
+        ➜ Explicit dependency on target 'CmuxExtensionSidebarExamples' in project 'CmuxExtensionSidebarExamples'
+        ➜ Explicit dependency on target 'CmuxSidebarProviderKit' in project 'CmuxSidebarProviderKit'
+    Target 'CmuxExtensionSidebarExamples' in project 'CmuxExtensionSidebarExamples'
+        ➜ Explicit dependency on target 'CmuxSidebarProviderKit' in project 'CmuxSidebarProviderKit'
+    Target 'CmuxSidebarProviderKit' in project 'CmuxSidebarProviderKit'
+        ➜ Explicit dependency on target 'CmuxSidebarProviderKit' in project 'CmuxSidebarProviderKit'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxSidebarProviderKit' in project 'CmuxSidebarProviderKit'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxExtensionKit' in project 'CmuxExtensionKit'
+        ➜ Explicit dependency on target 'CmuxExtensionKit' in project 'CmuxExtensionKit'
+    Target 'CmuxExtensionKit' in project 'CmuxExtensionKit' (no dependencies)
+    Target 'CmuxCore' in project 'CmuxCore'
+        ➜ Explicit dependency on target 'CmuxCore' in project 'CmuxCore'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxCore' in project 'CmuxCore'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxCommandPalette' in project 'CmuxCommandPalette'
+        ➜ Explicit dependency on target 'CmuxCommandPalette' in project 'CmuxCommandPalette'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxCommandPalette' in project 'CmuxCommandPalette'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxCanvasUI' in project 'CmuxCanvasUI'
+        ➜ Explicit dependency on target 'CmuxCanvasUI' in project 'CmuxCanvasUI'
+        ➜ Explicit dependency on target 'CmuxCanvas' in project 'CmuxCanvas'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxCanvasUI' in project 'CmuxCanvasUI'
+        ➜ Explicit dependency on target 'CmuxCanvas' in project 'CmuxCanvas'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxCanvas' in project 'CmuxCanvas'
+        ➜ Explicit dependency on target 'CmuxCanvas' in project 'CmuxCanvas'
+    Target 'CmuxCanvas' in project 'CmuxCanvas' (no dependencies)
+    Target 'CmuxBrowser' in project 'CmuxBrowser'
+        ➜ Explicit dependency on target 'CmuxBrowser' in project 'CmuxBrowser'
+        ➜ Explicit dependency on target 'Bonsplit' in project 'Bonsplit'
+    Target 'CmuxBrowser' in project 'CmuxBrowser'
+        ➜ Explicit dependency on target 'Bonsplit' in project 'Bonsplit'
+    Target 'CmuxAuthRuntime' in project 'CmuxAuthRuntime'
+        ➜ Explicit dependency on target 'CmuxAuthRuntime' in project 'CmuxAuthRuntime'
+        ➜ Explicit dependency on target 'CMUXAuthCore' in project 'CMUXAuthCore'
+        ➜ Explicit dependency on target 'StackAuth' in project 'StackAuth'
+    Target 'CmuxAuthRuntime' in project 'CmuxAuthRuntime'
+        ➜ Explicit dependency on target 'CMUXAuthCore' in project 'CMUXAuthCore'
+        ➜ Explicit dependency on target 'StackAuth' in project 'StackAuth'
+    Target 'StackAuth' in project 'StackAuth'
+        ➜ Explicit dependency on target 'StackAuth' in project 'StackAuth'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+    Target 'StackAuth' in project 'StackAuth'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'swift-crypto_Crypto' in project 'swift-crypto' (no dependencies)
+    Target 'CMUXAuthCore' in project 'CMUXAuthCore'
+        ➜ Explicit dependency on target 'CMUXAuthCore' in project 'CMUXAuthCore'
+    Target 'CMUXAuthCore' in project 'CMUXAuthCore' (no dependencies)
+    Target 'CmuxAppKitSupportUI' in project 'CmuxAppKitSupportUI'
+        ➜ Explicit dependency on target 'CmuxAppKitSupportUI' in project 'CmuxAppKitSupportUI'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxWorkspaces' in project 'CmuxWorkspaces'
+    Target 'CmuxAppKitSupportUI' in project 'CmuxAppKitSupportUI'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxWorkspaces' in project 'CmuxWorkspaces'
+    Target 'CmuxWorkspaces' in project 'CmuxWorkspaces'
+        ➜ Explicit dependency on target 'CmuxWorkspaces' in project 'CmuxWorkspaces'
+        ➜ Explicit dependency on target 'CmuxSettings' in project 'CmuxSettings'
+        ➜ Explicit dependency on target 'Bonsplit' in project 'Bonsplit'
+        ➜ Explicit dependency on target 'CMUXDebugLog' in project 'CMUXDebugLog'
+        ➜ Explicit dependency on target 'CmuxTestSupport' in project 'CmuxTestSupport'
+    Target 'CmuxWorkspaces' in project 'CmuxWorkspaces'
+        ➜ Explicit dependency on target 'CmuxSettings' in project 'CmuxSettings'
+        ➜ Explicit dependency on target 'Bonsplit' in project 'Bonsplit'
+        ➜ Explicit dependency on target 'CMUXDebugLog' in project 'CMUXDebugLog'
+        ➜ Explicit dependency on target 'CmuxTestSupport' in project 'CmuxTestSupport'
+    Target 'CmuxTestSupport' in project 'CmuxTestSupport'
+        ➜ Explicit dependency on target 'CmuxTestSupport' in project 'CmuxTestSupport'
+    Target 'CmuxTestSupport' in project 'CmuxTestSupport' (no dependencies)
+    Target 'CmuxAgentChat' in project 'CmuxAgentChat'
+        ➜ Explicit dependency on target 'CmuxAgentChat' in project 'CmuxAgentChat'
+    Target 'CmuxAgentChat' in project 'CmuxAgentChat' (no dependencies)
+    Target 'Bonsplit' in project 'Bonsplit'
+        ➜ Explicit dependency on target 'Bonsplit' in project 'Bonsplit'
+        ➜ Explicit dependency on target 'Bonsplit_Bonsplit' in project 'Bonsplit'
+    Target 'Bonsplit' in project 'Bonsplit'
+        ➜ Explicit dependency on target 'Bonsplit_Bonsplit' in project 'Bonsplit'
+    Target 'Bonsplit_Bonsplit' in project 'Bonsplit' (no dependencies)
+    Target 'CMUXDebugLog' in project 'CMUXDebugLog'
+        ➜ Explicit dependency on target 'CMUXDebugLog' in project 'CMUXDebugLog'
+    Target 'CMUXDebugLog' in project 'CMUXDebugLog' (no dependencies)
+    Target 'CmuxDockTilePlugin' in project 'cmux'
+        ➜ Explicit dependency on target 'CMUXAgentLaunch' in project 'CMUXAgentLaunch'
+    Target 'cmux-cli' in project 'cmux'
+        ➜ Explicit dependency on target 'CMUXAgentLaunch' in project 'CMUXAgentLaunch'
+        ➜ Explicit dependency on target 'CmuxControlSocket' in project 'CmuxControlSocket'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxSettings' in project 'CmuxSettings'
+        ➜ Explicit dependency on target 'CmuxSidebarInterpreterClient' in project 'CmuxSidebarInterpreterService'
+        ➜ Explicit dependency on target 'CmuxSwiftRender' in project 'CmuxSwiftRender'
+        ➜ Explicit dependency on target 'CmuxSwiftRenderUI' in project 'CmuxSwiftRenderUI'
+        ➜ Explicit dependency on target 'Sentry' in project 'Sentry'
+    Target 'Sentry' in project 'Sentry'
+        ➜ Explicit dependency on target 'SentryCppHelper' in project 'Sentry'
+    Target 'SentryCppHelper' in project 'Sentry' (no dependencies)
+    Target 'CmuxSwiftRenderUI' in project 'CmuxSwiftRenderUI'
+        ➜ Explicit dependency on target 'CmuxSwiftRenderUI' in project 'CmuxSwiftRenderUI'
+        ➜ Explicit dependency on target 'CmuxSwiftRenderUI_CmuxSwiftRenderUI' in project 'CmuxSwiftRenderUI'
+        ➜ Explicit dependency on target 'CmuxSwiftRender' in project 'CmuxSwiftRender'
+        ➜ Explicit dependency on target 'CmuxSettings' in project 'CmuxSettings'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxSwiftRenderUI' in project 'CmuxSwiftRenderUI'
+        ➜ Explicit dependency on target 'CmuxSwiftRenderUI_CmuxSwiftRenderUI' in project 'CmuxSwiftRenderUI'
+        ➜ Explicit dependency on target 'CmuxSwiftRender' in project 'CmuxSwiftRender'
+        ➜ Explicit dependency on target 'CmuxSettings' in project 'CmuxSettings'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxSwiftRenderUI_CmuxSwiftRenderUI' in project 'CmuxSwiftRenderUI' (no dependencies)
+    Target 'CmuxSidebarInterpreterClient' in project 'CmuxSidebarInterpreterService'
+        ➜ Explicit dependency on target 'CmuxSidebarInterpreterClient' in project 'CmuxSidebarInterpreterService'
+        ➜ Explicit dependency on target 'CmuxSwiftRender' in project 'CmuxSwiftRender'
+    Target 'CmuxSidebarInterpreterClient' in project 'CmuxSidebarInterpreterService'
+        ➜ Explicit dependency on target 'CmuxSwiftRender' in project 'CmuxSwiftRender'
+    Target 'CmuxSwiftRender' in project 'CmuxSwiftRender'
+        ➜ Explicit dependency on target 'CmuxSwiftRender' in project 'CmuxSwiftRender'
+        ➜ Explicit dependency on target 'SwiftSyntax' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftParser' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftOperators' in project 'swift-syntax'
+    Target 'CmuxSwiftRender' in project 'CmuxSwiftRender'
+        ➜ Explicit dependency on target 'SwiftSyntax' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftParser' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftOperators' in project 'swift-syntax'
+    Target 'SwiftOperators' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftOperators' in project 'swift-syntax'
+        ➜ Explicit dependency on target '_SwiftSyntaxCShims' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax509' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax510' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax600' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftDiagnostics' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftParser' in project 'swift-syntax'
+    Target 'SwiftOperators' in project 'swift-syntax'
+        ➜ Explicit dependency on target '_SwiftSyntaxCShims' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax509' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax510' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax600' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftDiagnostics' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftParser' in project 'swift-syntax'
+    Target 'SwiftDiagnostics' in project 'swift-syntax'
+        ➜ Explicit dependency on target '_SwiftSyntaxCShims' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax509' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax510' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax600' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax' in project 'swift-syntax'
+    Target 'SwiftParser' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftParser' in project 'swift-syntax'
+        ➜ Explicit dependency on target '_SwiftSyntaxCShims' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax509' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax510' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax600' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax' in project 'swift-syntax'
+    Target 'SwiftParser' in project 'swift-syntax'
+        ➜ Explicit dependency on target '_SwiftSyntaxCShims' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax509' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax510' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax600' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax' in project 'swift-syntax'
+    Target 'SwiftSyntax' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax' in project 'swift-syntax'
+        ➜ Explicit dependency on target '_SwiftSyntaxCShims' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax509' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax510' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax600' in project 'swift-syntax'
+    Target 'SwiftSyntax' in project 'swift-syntax'
+        ➜ Explicit dependency on target '_SwiftSyntaxCShims' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax509' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax510' in project 'swift-syntax'
+        ➜ Explicit dependency on target 'SwiftSyntax600' in project 'swift-syntax'
+    Target 'SwiftSyntax600' in project 'swift-syntax' (no dependencies)
+    Target 'SwiftSyntax510' in project 'swift-syntax' (no dependencies)
+    Target 'SwiftSyntax509' in project 'swift-syntax' (no dependencies)
+    Target '_SwiftSyntaxCShims' in project 'swift-syntax' (no dependencies)
+    Target 'CmuxControlSocket' in project 'CmuxControlSocket'
+        ➜ Explicit dependency on target 'CmuxControlSocket' in project 'CmuxControlSocket'
+        ➜ Explicit dependency on target 'CmuxSettings' in project 'CmuxSettings'
+    Target 'CmuxControlSocket' in project 'CmuxControlSocket'
+        ➜ Explicit dependency on target 'CmuxSettings' in project 'CmuxSettings'
+    Target 'CmuxSettings' in project 'CmuxSettings'
+        ➜ Explicit dependency on target 'CmuxSettings' in project 'CmuxSettings'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxSettings' in project 'CmuxSettings'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+    Target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxFoundationAtomicsC' in project 'CmuxFoundation'
+    Target 'CmuxFoundation' in project 'CmuxFoundation'
+        ➜ Explicit dependency on target 'CmuxFoundationAtomicsC' in project 'CmuxFoundation'
+    Target 'CmuxFoundationAtomicsC' in project 'CmuxFoundation' (no dependencies)
+    Target 'CMUXAgentLaunch' in project 'CMUXAgentLaunch'
+        ➜ Explicit dependency on target 'CMUXAgentLaunch' in project 'CMUXAgentLaunch'
+    Target 'CMUXAgentLaunch' in project 'CMUXAgentLaunch' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk -x c -c /dev/null

@@ -1,0 +1,1 @@
+"$CLI" --socket "$SOCK" ios select AC2C01F6-E504-476C-82CE-FE759D96F403    0.01s user 0.01s system 1% cpu 1.093 total

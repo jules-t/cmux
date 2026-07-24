@@ -1,0 +1,138 @@
+<?xml version="1.0"?>
+
+<trace-toc>
+    <run number="1">
+        <info>
+            <target>
+                <device platform="macOS" model="MacBook Pro" name="lawrence’s MacBook Pro (2)" os-version="26.5 (25F71)" uuid="0DF98A20-6269-52B3-84B1-AA5EE7101DE9"/>
+                <process type="attached" return-exit-status="0" name="cmux DEV" pid="18014" termination-reason="exit(0)"/>
+                <environment>
+                    <item key="CMUX_BUNDLE_ID" value="com.cmuxterm.app.debug.s785r"/>
+                    <item key="CMUX_BUNDLED_CLI_PATH" value="/Users/lawrence/Library/Developer/Xcode/DerivedData/cmux-s785r/Build/Products/Debug/cmux DEV s785r.app/Contents/Resources/bin/cmux"/>
+                    <item key="CMUX_IROH_BROKER_BASE_URL" value="https://cmux-staging.vercel.app"/>
+                    <item key="main_stack" value=""/>
+                    <item key="NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER" value="Control the in-app browser in conjunction with the Browser Plugin."/>
+                    <item key="__CFBundleIdentifier" value="com.cmuxterm.app.debug.s785r"/>
+                    <item key="BROWSER_USE_AVAILABLE_BACKENDS" value="chrome,iab"/>
+                    <item key="NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS" value="1000"/>
+                    <item key="CODEX_CLI_PATH" value="/Applications/ChatGPT.app/Contents/Resources/codex"/>
+                    <item key="SKY_CUA_SERVICE_PATH" value="/Users/lawrence/.codex/plugins/cache/openai-bundled/computer-use/1.0.1000451/Codex Computer Use.app"/>
+                    <item key="BROWSER_USE_CODEX_APP_BUILD_FLAVOR" value="prod"/>
+                    <item key="executable_file" value="0x1a01000011,0x2c996a4f"/>
+                    <item key="CMUXD_UNIX_PATH" value="/Users/lawrence/Library/Application Support/cmux/cmuxd-dev-s785r.sock"/>
+                    <item key="PORT" value="3777"/>
+                    <item key="CMUX_PORT_RANGE" value="1"/>
+                    <item key="CMUX_SHELL_INTEGRATION_DIR" value="/Users/lawrence/Library/Developer/Xcode/DerivedData/cmux-s785r/Build/Products/Debug/cmux DEV s785r.app/Contents/Resources/shell-integration"/>
+                    <item key="CMUX_VM_API_BASE_URL" value="http://localhost:3777"/>
+                    <item key="OSLogRateLimit" value="64"/>
+                    <item key="__CF_USER_TEXT_ENCODING" value="0x1F5:0x0:0x0"/>
+                    <item key="NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S" value="583bf903a6cfb9b00a01e1583381ce921c71d7585085c6fa6b805baa0f60230b,6d25aa7656feac858f3a3bdaea5bcbab0dbfd426c9de8e6931ce90c399ee8e4f"/>
+                    <item key="HOME" value="/Users/lawrence"/>
+                    <item key="CMUX_PORT" value="3777"/>
+                    <item key="SSH_AUTH_SOCK" value="/var/run/com.apple.launchd.iaDcuhxPdv/Listeners"/>
+                    <item key="COMMAND_MODE" value="unix2003"/>
+                    <item key="CMUX_WWW_ORIGIN" value="http://localhost:3777"/>
+                    <item key="security_config" value="0x0"/>
+                    <item key="CMUX_TAG" value="s785r"/>
+                    <item key="NODE_REPL_NODE_MODULE_DIRS" value="/Applications/ChatGPT.app/Contents/Resources/cua_node/lib/node_modules"/>
+                    <item key="NODE_REPL_INSTRUCTIONS_USE_CASE_COMPUTER_USE" value="Control desktop apps on macOS through Computer Use."/>
+                    <item key="CMUX_PORT_END" value="3777"/>
+                    <item key="XPC_SERVICE_NAME" value="application.com.cmuxterm.app.debug.s785r.748250169.748251727"/>
+                    <item key="CMUX_DEBUG_LOG" value="/tmp/cmux-debug-s785r.log"/>
+                    <item key="TMPDIR" value="/var/folders/rr/vmfx6xh12dz2tlvgtmyvjmf80000gn/T/"/>
+                    <item key="CODEX_HOME" value="/Users/lawrence/.codex"/>
+                    <item key="CMUXTERM_REPO_ROOT" value="/Users/lawrence/fun/cmuxterm-hq/worktrees/feat-simulator-pane"/>
+                    <item key="CMUX_REMOTE_DAEMON_ALLOW_LOCAL_BUILD" value="1"/>
+                    <item key="LANG" value="en_US.UTF-8"/>
+                    <item key="PATH" value="/Users/lawrence/.codex/tmp/arg0/codex-arg0seQNOV:/Users/lawrence/.bun/install/global/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/codex-path:/var/folders/rr/vmfx6xh12dz2tlvgtmyvjmf80000gn/T//cmux-cli-shims/5FCC228C-8C02-44B6-89F5-4D3F6AEBFD64:/Users/lawrence/.vite-plus/bin:/Users/lawrence/fun/cmuxterm-hq/tools/local-build-guards:/Users/lawrence/.grok/bin:/Users/lawrence/bin:/Users/lawrence/.omnara/bin:/Users/lawrence/.codeium/windsurf/bin:/Users/lawrence/go/bin:/Users/lawrence/.antigravity/antigravity/bin:/Users/lawrence/.local/bin:/Users/lawrence/.nvm/versions/node/v25.8.1/bin:/Users/lawrence/.deno/bin:/Users/lawrence/Library/pnpm:/Users/lawrence/.bun/bin:/usr/local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Users/lawrence/.cargo/bin:/var/folders/rr/vmfx6xh12dz2tlvgtmyvjmf80000gn/T/cmux-cli-shims/5FCC228C-8C02-44B6-89F5-4D3F6AEBFD64:/Applications/cmux.app/Contents/Resources/bin:/Users/lawrence/.orbstack/bin:/Users/lawrence/.rml/bin:/Users/lawrence/.lmstudio/bin"/>
+                    <item key="CMUX_API_BASE_URL" value="http://localhost:3777"/>
+                    <item key="BROWSER_USE_CODEX_APP_VERSION" value="26.715.52143"/>
+                    <item key="CMUX_SOCKET_MODE" value="allowAll"/>
+                    <item key="USER" value="lawrence"/>
+                    <item key="NODE_REPL_TRUSTED_CODE_PATHS" value="/Users/lawrence/.codex"/>
+                    <item key="NODE_REPL_NODE_PATH" value="/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node"/>
+                    <item key="ptr_munge" value=""/>
+                    <item key="TERM" value="xterm-256color"/>
+                    <item key="SHELL" value="/bin/zsh"/>
+                    <item key="executable_cdhash" value="03e82193aee2524575175cab18bded646ae47e30"/>
+                    <item key="CMUX_AUTH_CALLBACK_SCHEME" value="cmux-dev-s785r"/>
+                    <item key="XPC_FLAGS" value="1"/>
+                    <item key="dyld_file" value="0x1a01000011,0xfffffff000a955d"/>
+                    <item key="CMUX_SOCKET_ENABLE" value="1"/>
+                    <item key="NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME" value="Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative."/>
+                    <item key="CMUX_AUTH_WWW_ORIGIN" value="http://localhost:3777"/>
+                    <item key="th_port" value=""/>
+                    <item key="CMUX_SOCKET_PATH" value="/tmp/cmux-debug-s785r.sock"/>
+                    <item key="LOGNAME" value="lawrence"/>
+                    <item key="executable_boothash" value="5a6887ac0f080d93ec847a075604ba2fd126d565"/>
+                </environment>
+            </target>
+            <summary>
+                <start-date>2026-07-23T16:38:53.410-07:00</start-date>
+                <end-date>2026-07-23T16:39:14.364-07:00</end-date>
+                <duration>20.954610</duration>
+                <end-reason>Time limit reached</end-reason>
+                <instruments-version>16.0 (17F113)</instruments-version>
+                <template-name>Time Profiler</template-name>
+                <recording-mode>Deferred</recording-mode>
+                <time-limit>20 seconds</time-limit>
+                <intruments-recording-settings>
+                    <instrument name="Hangs">
+                        <array>
+                            <dictionary>
+                                <key name="Reporting Threshold">Include Microhangs (&gt;250ms)</key>
+                            </dictionary>
+                        </array>
+                    </instrument>
+                </intruments-recording-settings>
+            </summary>
+        </info>
+        <processes>
+            <process name="kernel" pid="0" path="/System/Library/Kernels/kernel.release.t6050"/>
+            <process name="cmux DEV" pid="18014" path="/Users/lawrence/Library/Developer/Xcode/DerivedData/cmux-s785r/Build/Products/Debug/cmux DEV s785r.app/Contents/MacOS/cmux DEV"/>
+        </processes>
+        <data>
+            <table schema="tick" frequency="1" documentation="Provides modelers with a regular reference time for modeling fixed time-based statistics. The ticks are evenly spaced with a configurable frequency specifying the number of events to generate per second, so a tick schema with a frequency of 10 will generate a row every 100ms."/>
+            <table schema="life-cycle-period" target-pid="SINGLE" documentation="Identifies where an application is in its lifecycle."/>
+            <table schema="tick" frequency="10" documentation="Provides modelers with a regular reference time for modeling fixed time-based statistics. The ticks are evenly spaced with a configurable frequency specifying the number of events to generate per second, so a tick schema with a frequency of 10 will generate a row every 100ms."/>
+            <table schema="device-thermal-state-intervals" documentation="Denotes the current thermal state of the device."/>
+            <table enable-priority-inversion-detection="0" target-pid="SINGLE" message-type="Fault" schema="os-log" category="&quot;Hang Risk&quot; &quot;Severe Hang Risk&quot; CFNetwork Contacts CoreML" subsystem="&quot;com.apple.runtime-issues&quot;" documentation="Holds a message from the OS's Unified Logging and Tracing component."/>
+            <table schema="os-signpost" category="InduceCondition" subsystem="&quot;com.apple.ConditionInducer.LowSeverity&quot;" documentation="Holds a signpost event from the OS's Unified Logging and Tracing component."/>
+            <table schema="os-signpost" category="PointsOfInterest" dynamic-tracing-enabled-subsystems="&quot;com.apple.neappprivacy&quot;" documentation="Holds a signpost event from the OS's Unified Logging and Tracing component."/>
+            <table category="PointsOfInterest" schema="os-log" documentation="Holds a message from the OS's Unified Logging and Tracing component."/>
+            <table schema="hang-risks" detect-priority-inversions="0" target-pid="SINGLE"/>
+            <table hangs-threshold="250" schema="potential-hangs" target-pid="SINGLE"/>
+            <table target-pid="SINGLE" schema="global-poi-layout" exclude-os-logs="0" documentation="A point of interest that can be laid out on a graph view."/>
+            <table schema="kdebug-signpost" target-pid="SINGLE" documentation="Marks a point in time denoted by a special type of kdebug trace."/>
+            <table target-pid="SINGLE" context-switch-sampling="0" high-frequency-sampling="0" schema="time-profile" record-waiting-threads="0" needs-kernel-callstack="0" documentation="When combined with other time-profile samples, creates a statistical picture of where your application is spending its time."/>
+            <table codes="&quot;0x1f,0x05&quot;" target="SINGLE" schema="kdebug-strings" documentation="Associates numeric arguments with strings in kdebug trace points."/>
+            <table schema="dyld-library-load" target-pid="SINGLE"/>
+            <table schema="process-info" documentation="Associates processes with their process names."/>
+            <table codes="&quot;33,0x11&quot;" target="SINGLE" schema="kdebug-strings" documentation="Associates numeric arguments with strings in kdebug trace points."/>
+            <table category="PointsOfInterest" schema="os-log-arg" documentation="Holds a metadata argument from the OS's Unified Logging and Tracing component."/>
+            <table codes="&quot;0x1,0x25&quot;" target="SINGLE" schema="kdebug" documentation="Tracing the kernel and some system frameworks."/>
+            <table exclude-os-logs="0" schema="region-of-interest" target-pid="SINGLE" documentation="Determined by the modelers and represent a focus area that the developer is likely to be intereseted in."/>
+            <table codes="&quot;0x2b,0x65&quot;" schema="kdebug" documentation="Tracing the kernel and some system frameworks."/>
+            <table codes="&quot;0x07,0x00&quot;" target="SINGLE" schema="kdebug" documentation="Tracing the kernel and some system frameworks."/>
+            <table codes="&quot;0x2d,*&quot;" schema="kdebug" callstack="user" target="SINGLE" documentation="Tracing the kernel and some system frameworks."/>
+            <table codes="&quot;46,2&quot;" schema="kdebug" callstack="user" target="SINGLE" documentation="Tracing the kernel and some system frameworks."/>
+            <table codes="&quot;0x07,0x00&quot; &quot;0x1f,0x05&quot;" target="SINGLE" schema="kdebug" documentation="Tracing the kernel and some system frameworks."/>
+            <table codes="&quot;0x2b,0xd8&quot;" target="SINGLE" schema="kdebug" documentation="Tracing the kernel and some system frameworks."/>
+            <table codes="&quot;0x2b,0x87&quot;" target="SINGLE" schema="kdebug" documentation="Tracing the kernel and some system frameworks."/>
+            <table codes="&quot;0x1f,0x7&quot;" target="SINGLE" schema="kdebug" documentation="Tracing the kernel and some system frameworks."/>
+            <table codes="&quot;0x31,0xca&quot;" target="SINGLE" schema="kdebug" documentation="Tracing the kernel and some system frameworks."/>
+            <table codes="&quot;33,0x11&quot;" target="SINGLE" schema="kdebug" documentation="Tracing the kernel and some system frameworks."/>
+            <table codes="&quot;0x21,0xa&quot;" schema="kdebug" callstack="user" target="SINGLE" documentation="Tracing the kernel and some system frameworks."/>
+            <table codes="&quot;0x1,0xa&quot;" schema="kdebug" callstack="user" target="SINGLE" documentation="Tracing the kernel and some system frameworks."/>
+            <table schema="global-roi-layout" target-pid="SINGLE" documentation="Layout information for graphing regions of interest."/>
+            <table codes="&quot;0x2b,0xdc&quot;" target="SINGLE" schema="kdebug" documentation="Tracing the kernel and some system frameworks."/>
+            <table schema="gcd-perf-event" target-pid="SINGLE" documentation="Find sub-optimal uses of Grand Central Dispatch."/>
+            <table schema="thread-info" documentation="Associates threads with their owning process."/>
+            <table schema="runloop-events" target-pid="SINGLE"/>
+            <table exclude-os-logs="0" schema="roi-metadata" target-pid="SINGLE" documentation="Describes details about a given region of interest."/>
+            <table category="PointsOfInterest" schema="os-signpost-arg" documentation="Holds a signpost metadata argument from the OS's Unified Logging and Tracing component."/>
+            <table sample-rate-micro-seconds="1000" target="SINGLE" schema="time-sample" callstack="user" all-thread-states="NO" documentation="Holds a raw CPU profiling sample."/>
+        </data>
+        <tracks/>
+    </run>
+</trace-toc>

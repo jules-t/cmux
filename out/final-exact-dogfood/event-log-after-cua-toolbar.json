@@ -1,0 +1,103 @@
+{
+  "events" : [
+    {
+      "action" : "pointer",
+      "id" : "13986A47-59E5-441D-AF42-6F948AF0ABE7",
+      "succeeded" : true,
+      "summary" : "touch 0.061,0.975→0.061,0.975 ended",
+      "timestamp" : "2026-07-18T07:43:09Z"
+    },
+    {
+      "action" : "pointer",
+      "id" : "93C83C75-EB67-414B-BB5C-F4785B5C83B8",
+      "succeeded" : true,
+      "summary" : "touch 0.054,0.786→0.054,0.786 ended",
+      "timestamp" : "2026-07-18T07:43:08Z"
+    },
+    {
+      "action" : "pointer",
+      "id" : "E112BB54-E5AB-4564-84A1-47FEC6A53BCB",
+      "succeeded" : true,
+      "summary" : "touch 0.055,0.775→0.055,0.775 ended",
+      "timestamp" : "2026-07-18T07:43:08Z"
+    },
+    {
+      "action" : "pointer",
+      "id" : "9518AFDA-889D-417D-AE7A-83942E743E25",
+      "succeeded" : true,
+      "summary" : "touch 0.300,0.076→0.300,0.076 ended",
+      "timestamp" : "2026-07-18T07:43:07Z"
+    },
+    {
+      "action" : "pointer",
+      "id" : "5F9383DC-7E59-4E6B-A273-45FAAF691558",
+      "succeeded" : true,
+      "summary" : "touch 0.000,0.043→0.235,0.058 ended",
+      "timestamp" : "2026-07-18T07:43:06Z"
+    },
+    {
+      "action" : "pointer",
+      "id" : "785D7E8B-2A93-4C3A-80B3-162930E1C0AE",
+      "succeeded" : true,
+      "summary" : "touch 0.145,0.049→0.145,0.049 ended",
+      "timestamp" : "2026-07-18T07:43:06Z"
+    },
+    {
+      "action" : "pointer",
+      "id" : "1C417498-F3EB-490A-B13B-52DE1B5FDB7E",
+      "succeeded" : true,
+      "summary" : "touch 0.000,0.019→0.145,0.010 ended",
+      "timestamp" : "2026-07-18T07:43:05Z"
+    },
+    {
+      "action" : "pointer",
+      "id" : "7ECD66B8-51CA-4584-AE74-2F25CF3DAF01",
+      "succeeded" : true,
+      "summary" : "touch 0.060,0.973→0.060,0.973 ended",
+      "timestamp" : "2026-07-18T07:43:02Z"
+    },
+    {
+      "action" : "pointer",
+      "id" : "B157C55A-15B0-414C-B5D0-6C789EB2367E",
+      "succeeded" : true,
+      "summary" : "touch 0.054,0.779→0.054,0.779 ended",
+      "timestamp" : "2026-07-18T07:43:01Z"
+    },
+    {
+      "action" : "pointer",
+      "id" : "35529359-957B-4443-A6D6-602913D1EFC2",
+      "succeeded" : true,
+      "summary" : "touch 0.119,0.737→0.118,0.738 ended",
+      "timestamp" : "2026-07-18T07:43:01Z"
+    },
+    {
+      "action" : "interactive",
+      "id" : "A9EC15CF-8946-40F2-AFD1-193B47005C82",
+      "succeeded" : true,
+      "summary" : "interactive",
+      "timestamp" : "2026-07-18T07:42:51Z"
+    },
+    {
+      "action" : "rotate",
+      "id" : "D5CA8B81-9D54-4736-9785-1F40C73C5557",
+      "succeeded" : true,
+      "summary" : "landscape_left",
+      "timestamp" : "2026-07-18T07:42:51Z"
+    },
+    {
+      "action" : "rotate",
+      "id" : "31C8B6AC-AF8E-41F4-9FF9-E15B4191BE14",
+      "succeeded" : true,
+      "summary" : "portrait",
+      "timestamp" : "2026-07-18T07:42:00Z"
+    },
+    {
+      "action" : "rotate",
+      "id" : "28ADB97C-9616-4A2E-8946-632BC7F3649B",
+      "succeeded" : true,
+      "summary" : "portrait",
+      "timestamp" : "2026-07-18T07:41:28Z"
+    }
+  ],
+  "surface_ref" : "surface:2"
+}
