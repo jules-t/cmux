@@ -1119,6 +1119,18 @@ C0DE71B10000000000000001 /* AppDelegate+AgentChatNotifications.swift in Sources 
 		C0DE86520000000000000001 /* FilePreviewReloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE86520000000000000002 /* FilePreviewReloadTests.swift */; };
 		C0DE31390000000000000103 /* FilePreviewReviewFeedbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE31390000000000000104 /* FilePreviewReviewFeedbackTests.swift */; };
 		C0DE86520000000000000111 /* FilePreviewRevision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE86520000000000000112 /* FilePreviewRevision.swift */; };
+		F11E52270000000000006025 /* FilePreviewSyntaxCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006026 /* FilePreviewSyntaxCursor.swift */; };
+		F11E52270000000000006007 /* FilePreviewSyntaxGrammar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006008 /* FilePreviewSyntaxGrammar.swift */; };
+		F11E52270000000000006005 /* FilePreviewSyntaxHighlighterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006006 /* FilePreviewSyntaxHighlighterTests.swift */; };
+		F11E52270000000000006003 /* FilePreviewSyntaxHighlightSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006004 /* FilePreviewSyntaxHighlightSettings.swift */; };
+		F11E52270000000000006027 /* FilePreviewSyntaxHighlightSettingsFileStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006028 /* FilePreviewSyntaxHighlightSettingsFileStoreTests.swift */; };
+		F11E52270000000000006021 /* FilePreviewSyntaxKeywords.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006022 /* FilePreviewSyntaxKeywords.swift */; };
+		F11E52270000000000006017 /* FilePreviewSyntaxLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006018 /* FilePreviewSyntaxLanguage.swift */; };
+		F11E52270000000000006019 /* FilePreviewSyntaxTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006020 /* FilePreviewSyntaxTheme.swift */; };
+		F11E52270000000000006015 /* FilePreviewSyntaxToken.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006016 /* FilePreviewSyntaxToken.swift */; };
+		F11E52270000000000006009 /* FilePreviewSyntaxTokenizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006010 /* FilePreviewSyntaxTokenizer.swift */; };
+		F11E52270000000000006013 /* FilePreviewSyntaxTokenKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006014 /* FilePreviewSyntaxTokenKind.swift */; };
+		F11E52270000000000006023 /* FilePreviewSyntaxTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006024 /* FilePreviewSyntaxTypes.swift */; };
 		D0B10016A1B2C3D4E5F60001 /* FilePreviewTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0B10017A1B2C3D4E5F60001 /* FilePreviewTextEditor.swift */; };
 		C0DEFC100000000000000001 /* FilePreviewTextEditorTextKitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DEFC100000000000000002 /* FilePreviewTextEditorTextKitTests.swift */; };
 		C0DE86520000000000000113 /* FilePreviewViewport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE86520000000000000114 /* FilePreviewViewport.swift */; };
@@ -3798,6 +3810,18 @@ C0DE71B10000000000000002 /* AppDelegate+AgentChatNotifications.swift */ = {isa =
 		C0DE86520000000000000002 /* FilePreviewReloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePreviewReloadTests.swift; sourceTree = "<group>"; };
 		C0DE31390000000000000104 /* FilePreviewReviewFeedbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePreviewReviewFeedbackTests.swift; sourceTree = "<group>"; };
 		C0DE86520000000000000112 /* FilePreviewRevision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewRevision.swift; sourceTree = "<group>"; };
+		F11E52270000000000006026 /* FilePreviewSyntaxCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewSyntaxCursor.swift; sourceTree = "<group>"; };
+		F11E52270000000000006008 /* FilePreviewSyntaxGrammar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewSyntaxGrammar.swift; sourceTree = "<group>"; };
+		F11E52270000000000006006 /* FilePreviewSyntaxHighlighterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePreviewSyntaxHighlighterTests.swift; sourceTree = "<group>"; };
+		F11E52270000000000006004 /* FilePreviewSyntaxHighlightSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewSyntaxHighlightSettings.swift; sourceTree = "<group>"; };
+		F11E52270000000000006028 /* FilePreviewSyntaxHighlightSettingsFileStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePreviewSyntaxHighlightSettingsFileStoreTests.swift; sourceTree = "<group>"; };
+		F11E52270000000000006022 /* FilePreviewSyntaxKeywords.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewSyntaxKeywords.swift; sourceTree = "<group>"; };
+		F11E52270000000000006018 /* FilePreviewSyntaxLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewSyntaxLanguage.swift; sourceTree = "<group>"; };
+		F11E52270000000000006020 /* FilePreviewSyntaxTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewSyntaxTheme.swift; sourceTree = "<group>"; };
+		F11E52270000000000006016 /* FilePreviewSyntaxToken.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewSyntaxToken.swift; sourceTree = "<group>"; };
+		F11E52270000000000006010 /* FilePreviewSyntaxTokenizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewSyntaxTokenizer.swift; sourceTree = "<group>"; };
+		F11E52270000000000006014 /* FilePreviewSyntaxTokenKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewSyntaxTokenKind.swift; sourceTree = "<group>"; };
+		F11E52270000000000006024 /* FilePreviewSyntaxTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewSyntaxTypes.swift; sourceTree = "<group>"; };
 		D0B10017A1B2C3D4E5F60001 /* FilePreviewTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewTextEditor.swift; sourceTree = "<group>"; };
 		C0DEFC100000000000000002 /* FilePreviewTextEditorTextKitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePreviewTextEditorTextKitTests.swift; sourceTree = "<group>"; };
 		C0DE86520000000000000114 /* FilePreviewViewport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewViewport.swift; sourceTree = "<group>"; };
@@ -6940,6 +6964,16 @@ C0DE71B10000000000000002 /* AppDelegate+AgentChatNotifications.swift */ = {isa =
 				F5168A070000000000000002 /* MarkdownFontFamilyCache.swift */,
 				F5168A050000000000000002 /* MarkdownMaxWidthSettings.swift */,
 				F11E52270000000000005228 /* FilePreviewWordWrapSettings.swift */,
+				F11E52270000000000006004 /* FilePreviewSyntaxHighlightSettings.swift */,
+				F11E52270000000000006026 /* FilePreviewSyntaxCursor.swift */,
+				F11E52270000000000006008 /* FilePreviewSyntaxGrammar.swift */,
+				F11E52270000000000006014 /* FilePreviewSyntaxTokenKind.swift */,
+				F11E52270000000000006016 /* FilePreviewSyntaxToken.swift */,
+				F11E52270000000000006018 /* FilePreviewSyntaxLanguage.swift */,
+				F11E52270000000000006020 /* FilePreviewSyntaxTheme.swift */,
+				F11E52270000000000006022 /* FilePreviewSyntaxKeywords.swift */,
+				F11E52270000000000006024 /* FilePreviewSyntaxTypes.swift */,
+				F11E52270000000000006010 /* FilePreviewSyntaxTokenizer.swift */,
 				F5168A060000000000000002 /* MarkdownTypographyDefaults.swift */,
 				F5168A020000000000000002 /* MarkdownTypographyControl.swift */,
 				A5001419 /* MarkdownPanelView.swift */,
@@ -7850,6 +7884,8 @@ C0DE71B10000000000000002 /* AppDelegate+AgentChatNotifications.swift */ = {isa =
 				C0DE86520000000000000118 /* FilePreviewNativeRefreshStateTests.swift */,
 				C0DE86520000000000000011 /* FilePreviewReloadCompletionTests.swift */,
 				C0DE86520000000000000002 /* FilePreviewReloadTests.swift */,
+				F11E52270000000000006006 /* FilePreviewSyntaxHighlighterTests.swift */,
+				F11E52270000000000006028 /* FilePreviewSyntaxHighlightSettingsFileStoreTests.swift */,
 				120A1EF846214C938416846E /* FileExplorerRootSyncPolicyTests.swift */,
 				4931A11B0000000000000001 /* HiddenRightSidebarContentMountingTests.swift */,
 				A4880BD05924400E5279D632 /* MobilePairingConnectionTransitionTests.swift */,
@@ -9262,6 +9298,16 @@ C0DE71B10000000000000002 /* AppDelegate+AgentChatNotifications.swift */ = {isa =
 				DD62AFF1D95A1D5D1850AC10 /* FilePreviewQuickLookSession.swift in Sources */,
 				C0DE8652000000000000010F /* FilePreviewQuickLookViewCoordinator.swift in Sources */,
 				C0DE86520000000000000111 /* FilePreviewRevision.swift in Sources */,
+				F11E52270000000000006025 /* FilePreviewSyntaxCursor.swift in Sources */,
+				F11E52270000000000006007 /* FilePreviewSyntaxGrammar.swift in Sources */,
+				F11E52270000000000006003 /* FilePreviewSyntaxHighlightSettings.swift in Sources */,
+				F11E52270000000000006021 /* FilePreviewSyntaxKeywords.swift in Sources */,
+				F11E52270000000000006017 /* FilePreviewSyntaxLanguage.swift in Sources */,
+				F11E52270000000000006019 /* FilePreviewSyntaxTheme.swift in Sources */,
+				F11E52270000000000006015 /* FilePreviewSyntaxToken.swift in Sources */,
+				F11E52270000000000006009 /* FilePreviewSyntaxTokenizer.swift in Sources */,
+				F11E52270000000000006013 /* FilePreviewSyntaxTokenKind.swift in Sources */,
+				F11E52270000000000006023 /* FilePreviewSyntaxTypes.swift in Sources */,
 				D0B10016A1B2C3D4E5F60001 /* FilePreviewTextEditor.swift in Sources */,
 				C0DE86520000000000000113 /* FilePreviewViewport.swift in Sources */,
 					F11E52270000000000005227 /* FilePreviewWordWrapSettings.swift in Sources */,
@@ -10843,6 +10889,8 @@ C0DE71B10000000000000002 /* AppDelegate+AgentChatNotifications.swift */ = {isa =
 				C0DE86520000000000000012 /* FilePreviewReloadCompletionTests.swift in Sources */,
 				C0DE86520000000000000001 /* FilePreviewReloadTests.swift in Sources */,
 				C0DE31390000000000000103 /* FilePreviewReviewFeedbackTests.swift in Sources */,
+				F11E52270000000000006005 /* FilePreviewSyntaxHighlighterTests.swift in Sources */,
+				F11E52270000000000006027 /* FilePreviewSyntaxHighlightSettingsFileStoreTests.swift in Sources */,
 				C0DEFC100000000000000001 /* FilePreviewTextEditorTextKitTests.swift in Sources */,
 				FE002103 /* FileSearchRipgrepParserTests.swift in Sources */,
 				C35610000000000000000001 /* FinderFileDropRegressionTests.swift in Sources */,

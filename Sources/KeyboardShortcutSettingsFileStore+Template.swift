@@ -230,6 +230,7 @@ extension CmuxSettingsFileStore {
             [
                 "fileEditor": [
                     "wordWrap": FilePreviewWordWrapSettings.defaultEnabled,
+                    "syntaxHighlighting": FilePreviewSyntaxHighlightSettings.defaultEnabled,
                 ],
             ],
             [
