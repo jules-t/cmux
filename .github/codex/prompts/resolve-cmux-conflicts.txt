@@ -1,0 +1,31 @@
+You are resolving a rebase conflict in the personal cmux source branch.
+
+Read these files before changing anything:
+- personal-conflict-baseline.json
+- personal-conflict-result.json
+- personal-conflict-policy.json
+
+Also read the repository's AGENTS.md and obey its contributor instructions.
+
+Your mandate is deliberately narrow:
+1. Preserve the complete behavior of the target/base cmux release.
+2. Preserve every personal feature represented by the rebased commits.
+3. Resolve only mechanical or clearly compatible integration conflicts.
+4. Never remove, disable, skip, loosen, or rewrite tests merely to get a green result.
+5. Never bypass base behavior, validation, security, updater logic, signing logic, or release logic.
+6. If upstream's functional design contradicts the personal feature, if both behaviors cannot coexist,
+   if a protected path is involved, or if you are materially uncertain, stop without completing the rebase.
+
+Inspect the target changes, the original personal commits, and all conflict stages before choosing a
+resolution. Prefer adapting the personal change to the target release's current structure. A common safe
+case is when upstream moved code to another file and the personal behavior simply belongs in that new file.
+
+If and only if the resolution is safe:
+- Resolve every unmerged path.
+- Run focused static checks and tests that are available without weakening anything.
+- Continue the rebase with GIT_EDITOR=true until it fully completes.
+- Confirm `git diff --check` passes and `git status --porcelain` is clean apart from the three untracked
+  personal-conflict context files.
+
+Return `decision: "resolved"` only after the rebase has completed. Otherwise return `decision: "stop"`.
+Be specific about each resolution in the structured output.

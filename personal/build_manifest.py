@@ -1,0 +1,67 @@
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import pathlib
+import platform
+
+from personal.common import ControlError, load_json, utc_now, write_json
+
+
+def sha256(path: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Create the cmux Personal release manifest.")
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--archive", required=True)
+    parser.add_argument("--source-sha", required=True)
+    parser.add_argument("--base-tag", required=True)
+    parser.add_argument("--personal-tag", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--checksum-output", required=True)
+    args = parser.parse_args()
+
+    config = load_json(args.config)
+    archive = pathlib.Path(args.archive)
+    if not archive.is_file():
+        raise ControlError(f"archive not found: {archive}")
+    digest = sha256(archive)
+    manifest = {
+        "schema_version": 1,
+        "repository": config["fork_repository"],
+        "upstream_repository": config["upstream_repository"],
+        "app_name": config["app_name"],
+        "bundle_identifier": config["bundle_identifier"],
+        "architecture": config["architecture"],
+        "archive_name": archive.name,
+        "archive_sha256": digest,
+        "archive_size": archive.stat().st_size,
+        "source_sha": args.source_sha,
+        "base_tag": args.base_tag,
+        "personal_tag": args.personal_tag,
+        "workflow": os.environ.get("GITHUB_WORKFLOW_REF"),
+        "workflow_run_id": os.environ.get("GITHUB_RUN_ID"),
+        "workflow_run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+        "built_at": utc_now(),
+        "builder_os": platform.platform(),
+    }
+    write_json(args.output, manifest)
+    checksum = pathlib.Path(args.checksum_output)
+    checksum.write_text(f"{digest}  {archive.name}\n", encoding="utf-8")
+    print(json.dumps(manifest, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except ControlError as exc:
+        raise SystemExit(f"manifest generation blocked: {exc}") from exc

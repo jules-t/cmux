@@ -1,0 +1,230 @@
+name: Mirror upstream main and run personal canary
+
+on:
+  schedule:
+    - cron: "41 3 * * *"
+    - cron: "53 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      run_canary:
+        description: Rebase the personal commits onto main and dispatch a non-publishing build
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmux-personal-main-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      upstream_sha: ${{ steps.sync.outputs.upstream_sha }}
+    steps:
+      - name: Check out fork main
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Mirror official main exactly
+        id: sync
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/manaflow-ai/cmux.git
+          git fetch --no-tags upstream main
+          upstream_sha="$(git rev-parse upstream/main)"
+          current_sha="$(git rev-parse origin/main)"
+          if [[ "$current_sha" != "$upstream_sha" ]]; then
+            git push \
+              --force-with-lease="refs/heads/main:${current_sha}" \
+              origin \
+              "${upstream_sha}:refs/heads/main"
+          fi
+          echo "upstream_sha=$upstream_sha" >> "$GITHUB_OUTPUT"
+          {
+            echo "### upstream main mirror"
+            echo ""
+            echo "- upstream: \`$upstream_sha\`"
+            echo "- previous fork main: \`$current_sha\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  canary:
+    if: ${{ github.event.schedule == '53 3 * * 0' || (github.event_name == 'workflow_dispatch' && inputs.run_canary) }}
+    needs: mirror
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      status: ${{ steps.prepare.outputs.status }}
+      candidate_commit: ${{ steps.prepare.outputs.candidate_commit }}
+    steps:
+      - name: Check out control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: personal-control
+          path: control
+          persist-credentials: false
+
+      - name: Check out current personal source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: personal/stable
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare main canary
+        id: prepare
+        env:
+          PYTHONPATH: ${{ github.workspace }}/control
+          UPSTREAM_SHA: ${{ needs.mirror.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          current_tag="$(python3 -c 'import json; print(json.load(open("control/personal/state.json"))["current_stable_tag"])')"
+          git -C source remote add upstream https://github.com/manaflow-ai/cmux.git
+          git -C source fetch --force upstream \
+            main \
+            "refs/tags/${current_tag}:refs/tags/${current_tag}"
+          python3 control/personal/candidate_manager.py prepare \
+            --repo source \
+            --source-ref HEAD \
+            --current-base-ref "$current_tag" \
+            --target-ref "$UPSTREAM_SHA" \
+            --candidate-branch canary/main \
+            --policy control/personal/conflict-policy.json \
+            --baseline "$RUNNER_TEMP/canary-baseline.json" \
+            --output "$RUNNER_TEMP/canary-result.json" \
+            --bundle "$RUNNER_TEMP/canary.bundle"
+
+      - name: Upload canary diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: main-canary-diagnostics
+          path: |
+            ${{ runner.temp }}/canary-baseline.json
+            ${{ runner.temp }}/canary-result.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload clean canary bundle
+        if: ${{ steps.prepare.outputs.status == 'clean' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: main-canary-bundle
+          path: ${{ runner.temp }}/canary.bundle
+          if-no-files-found: error
+          retention-days: 1
+
+  dispatch_canary_build:
+    if: ${{ needs.canary.outputs.status == 'clean' }}
+    needs: [mirror, canary]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: write
+      contents: write
+    steps:
+      - name: Check out control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: personal-control
+          path: control
+          persist-credentials: false
+
+      - name: Download canary bundle
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: main-canary-bundle
+          path: candidate-artifact
+
+      - name: Publish replaceable canary ref and dispatch build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONPATH: ${{ github.workspace }}/control
+          CANDIDATE_SHA: ${{ needs.canary.outputs.candidate_commit }}
+        run: |
+          set -euo pipefail
+          python3 control/personal/candidate_manager.py clone-bundle \
+            --bundle candidate-artifact/canary.bundle \
+            --destination candidate \
+            --expected-commit "$CANDIDATE_SHA"
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/canary/main" >/dev/null 2>&1; then
+            gh api --method PATCH \
+              "repos/${GITHUB_REPOSITORY}/git/refs/heads/canary/main" \
+              -f sha="$CANDIDATE_SHA" \
+              -F force=true
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/heads/canary/main" \
+              -f sha="$CANDIDATE_SHA"
+          fi
+          gh workflow run personal-build.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref personal-control \
+            -f source_ref=canary/main \
+            -f promote_source=false \
+            -f publish_release=false
+
+  report-canary-conflict:
+    if: ${{ always() && needs.canary.result == 'success' && needs.canary.outputs.status == 'conflict' }}
+    needs: canary
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: personal-control
+          path: control
+          persist-credentials: false
+
+      - name: Report main canary conflict
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONPATH: ${{ github.workspace }}/control
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 control/personal/report_issue.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --assignee "$GITHUB_REPOSITORY_OWNER" \
+            --title "cmux Personal main canary has conflicts" \
+            --body "The weekly canary found conflicts against upstream main. This is an early warning only: personal/stable and the installed app were not changed. Review: ${RUN_URL}"
+
+  report-main-failure:
+    if: ${{ always() && (needs.mirror.result == 'failure' || needs.canary.result == 'failure' || needs.dispatch_canary_build.result == 'failure') }}
+    needs: [mirror, canary, dispatch_canary_build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: personal-control
+          path: control
+          persist-credentials: false
+
+      - name: Report mirror or canary failure
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONPATH: ${{ github.workspace }}/control
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 control/personal/report_issue.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --assignee "$GITHUB_REPOSITORY_OWNER" \
+            --title "cmux Personal main monitoring requires attention" \
+            --body "The upstream-main mirror or weekly canary failed. This did not change personal/stable or the installed app. Review: ${RUN_URL}"

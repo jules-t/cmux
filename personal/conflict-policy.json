@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "maximum_conflicted_files": 12,
+  "maximum_conflict_markers": 80,
+  "protected_patterns": [
+    ".github/workflows/**",
+    "Resources/Info.plist",
+    "**/*.entitlements",
+    "scripts/sign-*",
+    "scripts/notarize*",
+    "scripts/release*",
+    "scripts/upload-*",
+    "Packages/macOS/CmuxUpdater/**",
+    "Sources/UpdateController*",
+    "Sources/**/UpdateController*"
+  ],
+  "manual_review_patterns": [
+    "cmux.xcodeproj/project.pbxproj",
+    "**/Package.resolved",
+    "**/*.xcodeproj/**",
+    "**/*.xcworkspace/**"
+  ],
+  "test_patterns": [
+    "**/*Tests.swift",
+    "**/Tests/**",
+    "tests/**",
+    "tests_v2/**"
+  ],
+  "invariants": [
+    "The target stable tag must remain an ancestor of the candidate.",
+    "Every personal commit must survive the rebase; an empty or dropped personal commit stops promotion.",
+    "Existing personal tests may not be removed, disabled, weakened, or converted into unconditional skips.",
+    "Base cmux behavior may not be deleted or bypassed merely to make the personal feature compile.",
+    "The syntax-highlighting feature and its user-facing setting must remain functional.",
+    "Updater, signing, entitlement, release, and workflow conflicts require human review."
+  ]
+}

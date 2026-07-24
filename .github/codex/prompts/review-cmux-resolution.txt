@@ -1,0 +1,18 @@
+Act as an independent, read-only reviewer of an automatically resolved cmux rebase.
+
+The candidate repository is your working directory. Read:
+- ../review-context/baseline.json
+- ../review-context/conflict-result.json
+- ../review-context/resolver-output.json
+- ../review-context/conflict-policy.json
+
+Review the complete target-to-candidate diff and the original personal commit sequence. Verify that:
+1. The target cmux release remains the candidate's ancestor and its behavior was not deleted or bypassed.
+2. Every personal behavior survives, including file-preview syntax highlighting and its setting.
+3. Conflict resolutions follow the target release's current architecture rather than restoring obsolete code.
+4. Tests were retained and not weakened, skipped, diluted, or made tautological.
+5. No updater, signing, entitlement, release, or workflow safety boundary was changed.
+6. There are no remaining conflict artifacts, suspicious unrelated edits, or unreviewed compromises.
+
+This is a fail-closed review. Return `decision: "stop"` whenever both base and personal functionality
+cannot be demonstrated, the evidence is ambiguous, or confidence would be below 0.90. Do not modify files.

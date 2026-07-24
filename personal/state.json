@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "current_stable_tag": "v0.64.20",
+  "last_promoted_personal_tag": null,
+  "pending_observation": {
+    "tag": null,
+    "count": 0,
+    "first_seen_at": null,
+    "last_seen_at": null
+  },
+  "attempt": {
+    "tag": null,
+    "status": null,
+    "workflow_run_id": null,
+    "updated_at": null
+  },
+  "last_check": {
+    "status": "seeded",
+    "appcast_tag": "v0.64.20",
+    "github_tag": "v0.64.20",
+    "checked_at": null,
+    "detail": "Seeded from the official cmux v0.64.20 release."
+  }
+}

@@ -1,0 +1,81 @@
+from __future__ import annotations
+
+import argparse
+import pathlib
+import plistlib
+
+from personal.common import ControlError, load_json
+
+
+def patch_bundle_plist(
+    plist: dict,
+    *,
+    app_name: str,
+    bundle_identifier: str,
+    auth_callback_scheme: str,
+    source_sha: str,
+    base_tag: str,
+    personal_tag: str,
+) -> dict:
+    plist["CFBundleName"] = app_name
+    plist["CFBundleDisplayName"] = app_name
+    plist["CFBundleIdentifier"] = bundle_identifier
+    plist["CMUXPersonalSourceSHA"] = source_sha
+    plist["CMUXPersonalBaseTag"] = base_tag
+    plist["CMUXPersonalReleaseTag"] = personal_tag
+    plist.pop("SUFeedURL", None)
+    plist.pop("SUPublicEDKey", None)
+
+    environment = dict(plist.get("LSEnvironment") or {})
+    environment["CMUX_BUNDLE_ID"] = bundle_identifier
+    environment["CMUX_AUTH_CALLBACK_SCHEME"] = auth_callback_scheme
+    plist["LSEnvironment"] = environment
+
+    for entry in plist.get("CFBundleURLTypes", []):
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get("CFBundleURLName", ""))
+        if name.endswith(".auth"):
+            entry["CFBundleURLName"] = f"{bundle_identifier}.auth"
+            entry["CFBundleURLSchemes"] = [auth_callback_scheme]
+        elif name.endswith(".web"):
+            entry["LSHandlerRank"] = "Alternate"
+    return plist
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Apply the isolated cmux Personal identity.")
+    parser.add_argument("--plist", required=True)
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--source-sha", required=True)
+    parser.add_argument("--base-tag", required=True)
+    parser.add_argument("--personal-tag", required=True)
+    args = parser.parse_args()
+
+    config = load_json(args.config)
+    path = pathlib.Path(args.plist)
+    if not path.is_file():
+        raise ControlError(f"Info.plist not found: {path}")
+    with path.open("rb") as handle:
+        plist = plistlib.load(handle)
+    if not isinstance(plist, dict):
+        raise ControlError("Info.plist root is not a dictionary")
+    patched = patch_bundle_plist(
+        plist,
+        app_name=str(config["app_name"]),
+        bundle_identifier=str(config["bundle_identifier"]),
+        auth_callback_scheme=str(config["auth_callback_scheme"]),
+        source_sha=args.source_sha,
+        base_tag=args.base_tag,
+        personal_tag=args.personal_tag,
+    )
+    with path.open("wb") as handle:
+        plistlib.dump(patched, handle, fmt=plistlib.FMT_BINARY, sort_keys=False)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except ControlError as exc:
+        raise SystemExit(f"bundle packaging blocked: {exc}") from exc

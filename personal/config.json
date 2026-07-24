@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "upstream_repository": "manaflow-ai/cmux",
+  "fork_repository": "jules-t/cmux",
+  "control_branch": "personal-control",
+  "mirror_branch": "main",
+  "source_branch": "personal/stable",
+  "release_feed_url": "https://github.com/manaflow-ai/cmux/releases/latest/download/appcast.xml",
+  "app_name": "cmux Personal",
+  "bundle_identifier": "com.cmuxterm.app.staging.personal",
+  "auth_callback_scheme": "cmux-personal",
+  "artifact_name": "cmux-personal-macos-arm64.zip",
+  "manifest_name": "cmux-personal-manifest.json",
+  "install_path": "~/Applications/cmux Personal.app",
+  "runner": "macos-26",
+  "architecture": "arm64",
+  "observations_required": 2,
+  "allowed_attestation_workflows": [
+    "jules-t/cmux/.github/workflows/personal-build.yml"
+  ]
+}

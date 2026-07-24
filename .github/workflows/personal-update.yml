@@ -1,0 +1,417 @@
+name: Monitor and update cmux Personal
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      target_tag:
+        description: Optional official stable tag to retry, such as v0.64.21
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmux-personal-stable-update
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      ready: ${{ steps.observe.outputs.ready }}
+      target_tag: ${{ steps.observe.outputs.target_tag }}
+      current_tag: ${{ steps.observe.outputs.current_tag }}
+    steps:
+      - name: Check out control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: personal-control
+
+      - name: Observe official stable release
+        id: observe
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          TARGET_TAG: ${{ inputs.target_tag }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [[ -n "${TARGET_TAG:-}" ]]; then
+            args+=(--target-tag "$TARGET_TAG" --retry)
+          fi
+          python3 personal/release_monitor.py \
+            --config personal/config.json \
+            --state personal/state.json \
+            --output "$RUNNER_TEMP/release-observation.json" \
+            "${args[@]}"
+
+      - name: Persist observation
+        run: |
+          set -euo pipefail
+          git config user.name "cmux Personal automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add personal/state.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(personal): record stable release observation"
+            git push origin personal-control
+          fi
+
+  prepare:
+    if: ${{ needs.monitor.outputs.ready == 'true' }}
+    needs: monitor
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      status: ${{ steps.prepare.outputs.status }}
+      eligible_for_agent: ${{ steps.prepare.outputs.eligible_for_agent }}
+      candidate_commit: ${{ steps.prepare.outputs.candidate_commit }}
+      candidate_branch: ${{ steps.prepare.outputs.candidate_branch }}
+      agent_available: ${{ steps.agent.outputs.available }}
+    steps:
+      - name: Check out control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: personal-control
+          path: control
+          persist-credentials: false
+
+      - name: Check out current personal source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: personal/stable
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch exact upstream target
+        working-directory: source
+        env:
+          TARGET_TAG: ${{ needs.monitor.outputs.target_tag }}
+          CURRENT_TAG: ${{ needs.monitor.outputs.current_tag }}
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/manaflow-ai/cmux.git
+          git fetch --force upstream \
+            "refs/tags/${CURRENT_TAG}:refs/tags/${CURRENT_TAG}" \
+            "refs/tags/${TARGET_TAG}:refs/tags/${TARGET_TAG}"
+
+      - name: Prepare candidate
+        id: prepare
+        env:
+          PYTHONPATH: ${{ github.workspace }}/control
+          TARGET_TAG: ${{ needs.monitor.outputs.target_tag }}
+          CURRENT_TAG: ${{ needs.monitor.outputs.current_tag }}
+        run: |
+          set -euo pipefail
+          branch="candidate/personal-${TARGET_TAG#v}"
+          python3 control/personal/candidate_manager.py prepare \
+            --repo source \
+            --source-ref HEAD \
+            --current-base-ref "$CURRENT_TAG" \
+            --target-ref "$TARGET_TAG" \
+            --candidate-branch "$branch" \
+            --policy control/personal/conflict-policy.json \
+            --baseline "$RUNNER_TEMP/baseline.json" \
+            --output "$RUNNER_TEMP/conflict-result.json" \
+            --bundle "$RUNNER_TEMP/candidate-clean.bundle"
+
+      - name: Detect configured conflict agent
+        id: agent
+        env:
+          OPENAI_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [[ -n "$OPENAI_KEY" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload candidate context
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: candidate-context
+          path: |
+            ${{ runner.temp }}/baseline.json
+            ${{ runner.temp }}/conflict-result.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload clean candidate
+        if: ${{ steps.prepare.outputs.status == 'clean' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: candidate-clean
+          path: ${{ runner.temp }}/candidate-clean.bundle
+          if-no-files-found: error
+          retention-days: 1
+
+  resolve:
+    if: ${{ needs.prepare.outputs.status == 'conflict' && needs.prepare.outputs.eligible_for_agent == 'true' && needs.prepare.outputs.agent_available == 'true' }}
+    needs: [monitor, prepare]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
+      candidate_commit: ${{ steps.verify.outputs.candidate_commit }}
+    steps:
+      - name: Check out control plane without write credentials
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: personal-control
+          path: control
+          persist-credentials: false
+
+      - name: Check out current personal source without write credentials
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: personal/stable
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download original conflict context
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: candidate-context
+          path: context
+
+      - name: Reproduce the conflict
+        env:
+          PYTHONPATH: ${{ github.workspace }}/control
+          TARGET_TAG: ${{ needs.monitor.outputs.target_tag }}
+          CURRENT_TAG: ${{ needs.monitor.outputs.current_tag }}
+        run: |
+          set -euo pipefail
+          git -C source remote add upstream https://github.com/manaflow-ai/cmux.git
+          git -C source fetch --force upstream \
+            "refs/tags/${CURRENT_TAG}:refs/tags/${CURRENT_TAG}" \
+            "refs/tags/${TARGET_TAG}:refs/tags/${TARGET_TAG}"
+          python3 control/personal/candidate_manager.py prepare \
+            --repo source \
+            --source-ref HEAD \
+            --current-base-ref "$CURRENT_TAG" \
+            --target-ref "$TARGET_TAG" \
+            --candidate-branch "${{ needs.prepare.outputs.candidate_branch }}" \
+            --policy control/personal/conflict-policy.json \
+            --baseline "$RUNNER_TEMP/resolver-baseline.json" \
+            --output "$RUNNER_TEMP/resolver-conflict.json" \
+            --leave-conflicts
+          cp "$RUNNER_TEMP/resolver-baseline.json" source/personal-conflict-baseline.json
+          cp "$RUNNER_TEMP/resolver-conflict.json" source/personal-conflict-result.json
+          cp control/personal/conflict-policy.json source/personal-conflict-policy.json
+
+      - name: Resolve compatible conflicts with Codex
+        id: resolver
+        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          safety-strategy: drop-sudo
+          working-directory: ${{ github.workspace }}/source
+          prompt-file: ${{ github.workspace }}/control/.github/codex/prompts/resolve-cmux-conflicts.txt
+          output-file: ${{ runner.temp }}/resolver-output.json
+          output-schema-file: ${{ github.workspace }}/control/personal/resolver-output.schema.json
+          effort: high
+          allow-bots: true
+          allow-bot-users: github-actions
+
+      - name: Verify resolved candidate deterministically
+        id: verify
+        env:
+          PYTHONPATH: ${{ github.workspace }}/control
+        run: |
+          set -euo pipefail
+          python3 -c 'import json,sys; value=json.load(open(sys.argv[1])); assert value["decision"] == "resolved", value' "$RUNNER_TEMP/resolver-output.json"
+          python3 control/personal/candidate_manager.py verify \
+            --repo source \
+            --policy control/personal/conflict-policy.json \
+            --baseline "$RUNNER_TEMP/resolver-baseline.json" \
+            --output "$RUNNER_TEMP/verification.json" \
+            --bundle "$RUNNER_TEMP/candidate-resolved.bundle"
+
+      - name: Upload resolved candidate for independent review
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: candidate-resolved
+          path: |
+            ${{ runner.temp }}/candidate-resolved.bundle
+            ${{ runner.temp }}/resolver-output.json
+            ${{ runner.temp }}/resolver-baseline.json
+            ${{ runner.temp }}/resolver-conflict.json
+          if-no-files-found: error
+          retention-days: 1
+
+  review:
+    if: ${{ needs.resolve.result == 'success' }}
+    needs: [monitor, prepare, resolve]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      approved: ${{ steps.gate.outputs.approved }}
+    steps:
+      - name: Check out control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: personal-control
+          path: control
+          persist-credentials: false
+
+      - name: Download resolved candidate
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: candidate-resolved
+          path: review-context
+
+      - name: Arrange review context
+        env:
+          PYTHONPATH: ${{ github.workspace }}/control
+        run: |
+          set -euo pipefail
+          cp review-context/resolver-baseline.json review-context/baseline.json
+          cp review-context/resolver-conflict.json review-context/conflict-result.json
+          cp control/personal/conflict-policy.json review-context/conflict-policy.json
+          python3 control/personal/candidate_manager.py clone-bundle \
+            --bundle review-context/candidate-resolved.bundle \
+            --destination candidate \
+            --expected-commit "${{ needs.resolve.outputs.candidate_commit }}"
+
+      - name: Independently review the resolution
+        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":read-only"
+          safety-strategy: drop-sudo
+          working-directory: ${{ github.workspace }}/candidate
+          prompt-file: ${{ github.workspace }}/control/.github/codex/prompts/review-cmux-resolution.txt
+          output-file: ${{ runner.temp }}/reviewer-output.json
+          output-schema-file: ${{ github.workspace }}/control/personal/reviewer-output.schema.json
+          effort: high
+          allow-bots: true
+          allow-bot-users: github-actions
+
+      - name: Apply fail-closed review gate
+        id: gate
+        env:
+          PYTHONPATH: ${{ github.workspace }}/control
+        run: |
+          python3 control/personal/conflict_policy.py review-gate \
+            --resolver review-context/resolver-output.json \
+            --reviewer "$RUNNER_TEMP/reviewer-output.json" \
+            --output "$RUNNER_TEMP/review-gate.json"
+
+  dispatch:
+    if: ${{ always() && needs.prepare.result == 'success' && (needs.prepare.outputs.status == 'clean' || (needs.resolve.result == 'success' && needs.review.outputs.approved == 'true')) }}
+    needs: [monitor, prepare, resolve, review]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: write
+      contents: write
+    steps:
+      - name: Check out current control state
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: personal-control
+          path: control
+
+      - name: Download clean candidate
+        if: ${{ needs.prepare.outputs.status == 'clean' }}
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: candidate-clean
+          path: candidate-artifact
+
+      - name: Download reviewed candidate
+        if: ${{ needs.prepare.outputs.status == 'conflict' }}
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: candidate-resolved
+          path: candidate-artifact
+
+      - name: Publish candidate ref and dispatch gated build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONPATH: ${{ github.workspace }}/control
+          TARGET_TAG: ${{ needs.monitor.outputs.target_tag }}
+          CANDIDATE_BRANCH: ${{ needs.prepare.outputs.candidate_branch }}
+          CLEAN_COMMIT: ${{ needs.prepare.outputs.candidate_commit }}
+          RESOLVED_COMMIT: ${{ needs.resolve.outputs.candidate_commit }}
+        run: |
+          set -euo pipefail
+          bundle="candidate-artifact/candidate-clean.bundle"
+          candidate_sha="$CLEAN_COMMIT"
+          if [[ "${{ needs.prepare.outputs.status }}" == "conflict" ]]; then
+            bundle="candidate-artifact/candidate-resolved.bundle"
+            candidate_sha="$RESOLVED_COMMIT"
+          fi
+          python3 control/personal/candidate_manager.py clone-bundle \
+            --bundle "$bundle" \
+            --destination candidate \
+            --expected-commit "$candidate_sha"
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" >/dev/null 2>&1; then
+            gh api --method PATCH \
+              "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" \
+              -f sha="$candidate_sha" \
+              -F force=true
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/heads/${CANDIDATE_BRANCH}" \
+              -f sha="$candidate_sha"
+          fi
+          gh workflow run personal-build.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref personal-control \
+            -f source_ref="$CANDIDATE_BRANCH" \
+            -f expected_base_tag="$TARGET_TAG" \
+            -f promote_source=true \
+            -f publish_release=true
+          python3 control/personal/state_manager.py mark-attempt \
+            --state control/personal/state.json \
+            --tag "$TARGET_TAG" \
+            --status dispatched \
+            --run-id "$GITHUB_RUN_ID"
+          git -C control config user.name "cmux Personal automation"
+          git -C control config user.email "actions@users.noreply.github.com"
+          git -C control add personal/state.json
+          git -C control commit -m "chore(personal): dispatch update for $TARGET_TAG"
+          git -C control push origin personal-control
+
+  report-blocked:
+    if: ${{ always() && (needs.monitor.result == 'failure' || (needs.monitor.outputs.ready == 'true' && needs.dispatch.result != 'success')) }}
+    needs: [monitor, prepare, resolve, review, dispatch]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: personal-control
+          path: control
+          persist-credentials: false
+
+      - name: Report blocked update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONPATH: ${{ github.workspace }}/control
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TARGET_TAG: ${{ needs.monitor.outputs.target_tag }}
+        run: |
+          python3 control/personal/report_issue.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --assignee "$GITHUB_REPOSITORY_OWNER" \
+            --title "cmux Personal automatic update requires attention" \
+            --body "The release monitor or automatic update stopped before completion (target: ${TARGET_TAG:-unknown}). No failed or unverified app was exposed to the local updater. This happens for source mismatches, protected/functional conflicts, low-confidence review, a missing OPENAI_API_KEY, or a failed gate. Review: ${RUN_URL}"
