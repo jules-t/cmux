@@ -163,7 +163,7 @@ jobs:
   build:
     needs: [metadata, ghostty_helper]
     runs-on: macos-26
-    timeout-minutes: 120
+    timeout-minutes: 180
     permissions:
       contents: read
     steps:

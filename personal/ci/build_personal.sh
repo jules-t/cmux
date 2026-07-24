@@ -10,6 +10,7 @@ SOURCE_ROOT="$(cd "$1" && pwd)"
 CONTROL_ROOT="$(cd "$2" && pwd)"
 DIST_ROOT="$3"
 DERIVED_DATA="$4"
+TEST_DERIVED_DATA="${DERIVED_DATA}-tests"
 SOURCE_SHA="$5"
 BASE_TAG="$6"
 PERSONAL_TAG="$7"
@@ -22,7 +23,7 @@ BUNDLE_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["bu
 ARCHIVE_NAME="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["artifact_name"])' "$CONFIG")"
 MANIFEST_NAME="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["manifest_name"])' "$CONFIG")"
 
-mkdir -p "$DIST_ROOT" "$DERIVED_DATA"
+mkdir -p "$DIST_ROOT" "$DERIVED_DATA" "$TEST_DERIVED_DATA"
 cd "$SOURCE_ROOT"
 
 ./scripts/check-pbxproj.sh
@@ -88,7 +89,7 @@ GITHUB_WORKSPACE="$SOURCE_ROOT" \
   -project cmux.xcodeproj \
   -scheme cmux-unit \
   -configuration Release \
-  -derivedDataPath "$DERIVED_DATA" \
+  -derivedDataPath "$TEST_DERIVED_DATA" \
   -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
   -destination "platform=macOS" \
   CMUX_SKIP_ZIG_BUILD=1 \
