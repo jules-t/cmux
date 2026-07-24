@@ -5,7 +5,7 @@ import Testing
 @Suite
 struct ShareProtocolCodecTests {
     @Test
-    func `Host hello preserves the TypeScript v1 envelope`() throws {
+    func `Host hello preserves the TypeScript v2 envelope`() throws {
         let message = ShareHostMessage.hello(
             shared: [ShareSharedWorkspace(id: "workspace", title: "Demo")],
             layouts: [ShareWorkspaceLayout(ws: "workspace", tree: nil)]
@@ -17,7 +17,7 @@ struct ShareProtocolCodecTests {
         )
 
         #expect(object["t"] as? String == "hello")
-        #expect(object["proto"] as? Int == 1)
+        #expect(object["proto"] as? Int == 2)
         #expect((object["shared"] as? [[String: Any]])?.first?["id"] as? String == "workspace")
         #expect((object["layouts"] as? [[String: Any]])?.first?["tree"] is NSNull)
         #expect(object["type"] == nil)

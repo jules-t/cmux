@@ -288,6 +288,11 @@ private struct ShareFeedRow: View {
                 RoundedRectangle(cornerRadius: 6)
                     .fill(Color.secondary.opacity(0.1))
             )
+            .accessibilityIdentifier(
+                resolution == nil
+                    ? "share.pendingAccessRequest"
+                    : "share.resolvedAccessRequest"
+            )
         }
     }
 

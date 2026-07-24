@@ -49,6 +49,11 @@ export interface ShareWorkerEnv {
   SHARE_SESSION: DurableObjectNamespace<ShareSession>;
   /** SPKI PEM for the web API's Ed25519 share-token signing key. */
   SHARE_JWT_PUBLIC_KEY?: string;
+  WORKER_VERSION_METADATA: {
+    id: string;
+    tag: string;
+    timestamp: string;
+  };
 }
 
 export class ShareSession extends DurableObject<ShareWorkerEnv> {
@@ -132,6 +137,20 @@ export class ShareSession extends DurableObject<ShareWorkerEnv> {
       await this.flushRestoreEffects();
       if (!this.sockets.has(attachment.connId)) return;
       const bytes = new Uint8Array(message);
+      const receivedAt = Date.now();
+      if (
+        !isHost &&
+        !this.ingress.consume(attachment.connId, bytes.byteLength, receivedAt)
+      ) {
+        await this.closeProtocolSocket(
+          ws,
+          attachment,
+          core,
+          RATE_LIMIT_CLOSE_CODE,
+          RATE_LIMIT_CLOSE_REASON,
+        );
+        return;
+      }
       const decision = validateBinaryIngress(isHost, bytes);
       if (!decision.ok) {
         await this.closeProtocolSocket(
@@ -150,6 +169,7 @@ export class ShareSession extends DurableObject<ShareWorkerEnv> {
           decision.header.pane,
           bytes,
           decision.header.kind,
+          receivedAt,
         ),
       );
       return;
@@ -296,6 +316,7 @@ export class ShareSession extends DurableObject<ShareWorkerEnv> {
       this.restored = true;
       const survivors: Array<{ id: string; user: string; email: string; hostToken: boolean }> =
         [];
+      let restoredOutstandingAckEntries = 0;
       const seen = new Set<string>();
       for (const ws of this.ctx.getWebSockets()) {
         const attachment = this.attachment(ws);
@@ -316,11 +337,18 @@ export class ShareSession extends DurableObject<ShareWorkerEnv> {
         }
         this.sockets.set(attachment.connId, ws);
         this.attachments.set(attachment.connId, attachment);
+        restoredOutstandingAckEntries += attachment.outstanding.length;
         survivors.push({
           id: attachment.connId,
           user: attachment.user,
           email: attachment.email,
           hostToken: attachment.host,
+        });
+      }
+      if (survivors.length > 0) {
+        this.logLifecycle("hibernation_restore", {
+          survivorSocketCount: survivors.length,
+          outstandingAckEntryCount: restoredOutstandingAckEntries,
         });
       }
       if (survivors.length > 0 || this.core.ended) {
@@ -404,5 +432,14 @@ export class ShareSession extends DurableObject<ShareWorkerEnv> {
   ): void {
     // Deliberately omit payloads, share codes, connection ids, and identities.
     console.error(JSON.stringify({ scope: "share_delivery", event, ...details }));
+  }
+
+  private logLifecycle(
+    event: string,
+    details: Readonly<Record<string, number>>,
+  ): void {
+    // Only bounded aggregate counts are permitted here. Session codes,
+    // connection ids, identities, routing ids, and payloads are excluded.
+    console.info(JSON.stringify({ scope: "share_lifecycle", event, ...details }));
   }
 }
