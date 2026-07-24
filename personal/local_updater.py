@@ -17,6 +17,7 @@ import zipfile
 from typing import Any
 
 from personal.common import ControlError, PERSONAL_TAG_RE, load_json, utc_now, write_json
+from personal.official_runtime_manifest import validate_official_runtime_manifest
 
 
 class AppRunningError(ControlError):
@@ -147,7 +148,9 @@ def inspect_bundle(
     *,
     expected_bundle_identifier: str,
     expected_source_sha: str,
+    expected_base_tag: str,
     expected_personal_tag: str,
+    expected_upstream_repository: str,
 ) -> None:
     plist_path = app / "Contents" / "Info.plist"
     if not plist_path.is_file():
@@ -160,6 +163,7 @@ def inspect_bundle(
     checks = {
         "CFBundleIdentifier": expected_bundle_identifier,
         "CMUXPersonalSourceSHA": expected_source_sha,
+        "CMUXPersonalBaseTag": expected_base_tag,
         "CMUXPersonalReleaseTag": expected_personal_tag,
     }
     for key, expected in checks.items():
@@ -167,6 +171,20 @@ def inspect_bundle(
             raise ControlError(
                 f"downloaded app has unexpected {key}: {plist.get(key)!r} (expected {expected!r})"
             )
+    raw_runtime_manifest = plist.get("CMUXRemoteDaemonManifestJSON")
+    if not isinstance(raw_runtime_manifest, str):
+        raise ControlError("downloaded app has no embedded remote runtime manifest")
+    try:
+        runtime_manifest = json.loads(raw_runtime_manifest)
+    except json.JSONDecodeError as exc:
+        raise ControlError(f"downloaded app has an invalid remote runtime manifest: {exc}") from exc
+    if not isinstance(runtime_manifest, dict):
+        raise ControlError("downloaded app remote runtime manifest is not an object")
+    validate_official_runtime_manifest(
+        runtime_manifest,
+        repository=expected_upstream_repository,
+        base_tag=expected_base_tag,
+    )
     binary = app / "Contents" / "MacOS" / "cmux"
     cli = app / "Contents" / "Resources" / "bin" / "cmux"
     if not binary.is_file() or not os.access(binary, os.X_OK):
@@ -327,6 +345,7 @@ def installation_status(
     state: dict[str, Any],
     expected_bundle_identifier: str,
     expected_personal_tag: str,
+    expected_upstream_repository: str,
 ) -> tuple[bool, str | None, str | None, str]:
     state_tag = state.get("personal_tag")
     normalized_state_tag = state_tag if isinstance(state_tag, str) else None
@@ -353,12 +372,22 @@ def installation_status(
             bundle_tag,
             "the updater state has no source commit",
         )
+    base_tag = state.get("base_tag")
+    if not isinstance(base_tag, str) or not base_tag:
+        return (
+            False,
+            normalized_state_tag,
+            bundle_tag,
+            "the updater state has no official base tag",
+        )
     try:
         inspect_bundle(
             destination,
             expected_bundle_identifier=expected_bundle_identifier,
             expected_source_sha=source_sha,
+            expected_base_tag=base_tag,
             expected_personal_tag=expected_personal_tag,
+            expected_upstream_repository=expected_upstream_repository,
         )
     except ControlError as exc:
         return (
@@ -401,6 +430,7 @@ def main() -> int:
         state=install_state(state_path),
         expected_bundle_identifier=str(config["bundle_identifier"]),
         expected_personal_tag=tag,
+        expected_upstream_repository=str(config["upstream_repository"]),
     )
     if args.check_only:
         print(
@@ -472,7 +502,9 @@ def main() -> int:
             app,
             expected_bundle_identifier=str(config["bundle_identifier"]),
             expected_source_sha=str(manifest["source_sha"]),
+            expected_base_tag=str(manifest["base_tag"]),
             expected_personal_tag=tag,
+            expected_upstream_repository=str(config["upstream_repository"]),
         )
         install_app(
             app,

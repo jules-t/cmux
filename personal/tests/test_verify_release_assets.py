@@ -3,10 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 import pathlib
+import plistlib
 import tempfile
 import unittest
+import zipfile
 
 from personal.common import ControlError
+from personal.tests.test_official_runtime_manifest import manifest_fixture
 from personal.verify_release_assets import verify_assets
 
 
@@ -14,9 +17,43 @@ CONFIG = {
     "artifact_name": "cmux-personal-macos-arm64.zip",
     "manifest_name": "cmux-personal-manifest.json",
     "fork_repository": "jules-t/cmux",
+    "upstream_repository": "manaflow-ai/cmux",
+    "app_name": "cmux Personal",
     "bundle_identifier": "com.cmuxterm.app.staging.personal",
     "architecture": "arm64",
 }
+
+
+def write_executable(archive: zipfile.ZipFile, name: str, payload: bytes) -> None:
+    info = zipfile.ZipInfo(name)
+    info.create_system = 3
+    info.external_attr = 0o100755 << 16
+    archive.writestr(info, payload)
+
+
+def write_app_archive(path: pathlib.Path, *, source_sha: str) -> None:
+    app_root = "cmux Personal.app/Contents"
+    plist = {
+        "CFBundleIdentifier": CONFIG["bundle_identifier"],
+        "CMUXPersonalSourceSHA": source_sha,
+        "CMUXPersonalBaseTag": "v0.64.20",
+        "CMUXPersonalReleaseTag": "personal-v0.64.20-r1",
+        "CMUXRemoteDaemonManifestJSON": json.dumps(manifest_fixture()),
+    }
+    arm64_header = (
+        (0xFEEDFACF).to_bytes(4, "little")
+        + (0x0100000C).to_bytes(4, "little")
+        + b"\0" * 32
+    )
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(f"{app_root}/Info.plist", plistlib.dumps(plist))
+        for relative in (
+            "MacOS/cmux",
+            "Resources/bin/cmux",
+            "Resources/bin/ghostty",
+            "Resources/bin/cmux-diff-sidecar",
+        ):
+            write_executable(archive, f"{app_root}/{relative}", arm64_header)
 
 
 class VerifyReleaseAssetsTests(unittest.TestCase):
@@ -24,10 +61,11 @@ class VerifyReleaseAssetsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             archive = root / CONFIG["artifact_name"]
-            archive.write_bytes(b"archive")
-            digest = hashlib.sha256(b"archive").hexdigest()
+            write_app_archive(archive, source_sha="abc")
+            digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             manifest = {
                 "repository": "jules-t/cmux",
+                "upstream_repository": "manaflow-ai/cmux",
                 "bundle_identifier": "com.cmuxterm.app.staging.personal",
                 "architecture": "arm64",
                 "archive_name": archive.name,
@@ -58,10 +96,11 @@ class VerifyReleaseAssetsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             archive = root / CONFIG["artifact_name"]
-            archive.write_bytes(b"archive")
-            digest = hashlib.sha256(b"archive").hexdigest()
+            write_app_archive(archive, source_sha="wrong")
+            digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             manifest = {
                 "repository": "jules-t/cmux",
+                "upstream_repository": "manaflow-ai/cmux",
                 "bundle_identifier": "com.cmuxterm.app.staging.personal",
                 "architecture": "arm64",
                 "archive_name": archive.name,

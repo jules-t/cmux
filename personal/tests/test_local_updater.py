@@ -54,9 +54,11 @@ class LocalUpdaterTests(unittest.TestCase):
                 state={
                     "personal_tag": "personal-v0.64.20-r1",
                     "source_sha": "a" * 40,
+                    "base_tag": "v0.64.20",
                 },
                 expected_bundle_identifier="com.cmuxterm.app.staging.personal",
                 expected_personal_tag="personal-v0.64.20-r1",
+                expected_upstream_repository="manaflow-ai/cmux",
             )
         self.assertFalse(current)
         self.assertEqual(state_tag, "personal-v0.64.20-r1")
@@ -76,9 +78,11 @@ class LocalUpdaterTests(unittest.TestCase):
             state={
                 "personal_tag": "personal-v0.64.20-r1",
                 "source_sha": "a" * 40,
+                "base_tag": "v0.64.20",
             },
             expected_bundle_identifier="com.cmuxterm.app.staging.personal",
             expected_personal_tag="personal-v0.64.20-r1",
+            expected_upstream_repository="manaflow-ai/cmux",
         )
         self.assertTrue(current)
         self.assertEqual(detail, "the installed app is verified")
@@ -98,9 +102,11 @@ class LocalUpdaterTests(unittest.TestCase):
             state={
                 "personal_tag": "personal-v0.64.20-r1",
                 "source_sha": "a" * 40,
+                "base_tag": "v0.64.20",
             },
             expected_bundle_identifier="com.cmuxterm.app.staging.personal",
             expected_personal_tag="personal-v0.64.20-r1",
+            expected_upstream_repository="manaflow-ai/cmux",
         )
         self.assertFalse(current)
         self.assertIn("invalid signature", detail)

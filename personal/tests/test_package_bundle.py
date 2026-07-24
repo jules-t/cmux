@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from personal.package_bundle import patch_bundle_plist
+from personal.tests.test_official_runtime_manifest import manifest_fixture
 
 
 class PackageBundleTests(unittest.TestCase):
@@ -33,6 +34,7 @@ class PackageBundleTests(unittest.TestCase):
             source_sha="abc",
             base_tag="v0.64.20",
             personal_tag="personal-v0.64.20-r1",
+            remote_daemon_manifest=manifest_fixture(),
         )
         self.assertEqual(patched["CFBundleIdentifier"], "com.cmuxterm.app.staging.personal")
         self.assertNotIn("SUFeedURL", patched)
@@ -46,6 +48,7 @@ class PackageBundleTests(unittest.TestCase):
             patched["LSEnvironment"]["CMUX_BUNDLE_ID"],
             "com.cmuxterm.app.staging.personal",
         )
+        self.assertIn("v0.64.20", patched["CMUXRemoteDaemonManifestJSON"])
 
 
 if __name__ == "__main__":

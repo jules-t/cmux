@@ -48,6 +48,10 @@ def main() -> int:
         package_destination / "local_updater.py",
     )
     shutil.copy2(control_root / "personal" / "common.py", package_destination / "common.py")
+    shutil.copy2(
+        control_root / "personal" / "official_runtime_manifest.py",
+        package_destination / "official_runtime_manifest.py",
+    )
     shutil.copy2(control_root / "personal" / "__init__.py", package_destination / "__init__.py")
     shutil.copy2(source_config, destination / "config.json")
 

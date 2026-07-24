@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 8 ]]; then
-  echo "usage: $0 <source-root> <control-root> <dist-root> <derived-data> <source-sha> <base-tag> <personal-tag> <ghostty-helper>" >&2
+if [[ $# -ne 9 ]]; then
+  echo "usage: $0 <source-root> <control-root> <dist-root> <derived-data> <source-sha> <base-tag> <personal-tag> <ghostty-helper> <remote-daemon-manifest>" >&2
   exit 2
 fi
 
@@ -14,6 +14,7 @@ SOURCE_SHA="$5"
 BASE_TAG="$6"
 PERSONAL_TAG="$7"
 GHOSTTY_HELPER_SOURCE="$(cd "$(dirname "$8")" && pwd)/$(basename "$8")"
+REMOTE_DAEMON_MANIFEST="$(cd "$(dirname "$9")" && pwd)/$(basename "$9")"
 CONFIG="$CONTROL_ROOT/personal/config.json"
 
 APP_NAME="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["app_name"])' "$CONFIG")"
@@ -102,7 +103,8 @@ python3 "$CONTROL_ROOT/personal/package_bundle.py" \
   --config "$CONFIG" \
   --source-sha "$SOURCE_SHA" \
   --base-tag "$BASE_TAG" \
-  --personal-tag "$PERSONAL_TAG"
+  --personal-tag "$PERSONAL_TAG" \
+  --remote-daemon-manifest "$REMOTE_DAEMON_MANIFEST"
 
 if [[ ! -f "$GHOSTTY_HELPER_SOURCE" || ! -x "$GHOSTTY_HELPER_SOURCE" ]]; then
   echo "real Ghostty CLI helper is missing or non-executable: $GHOSTTY_HELPER_SOURCE" >&2
@@ -111,6 +113,10 @@ fi
 GHOSTTY_HELPER="$PERSONAL_APP/Contents/Resources/bin/ghostty"
 install -m 755 "$GHOSTTY_HELPER_SOURCE" "$GHOSTTY_HELPER"
 lipo "$GHOSTTY_HELPER" -verify_arch arm64
+if strings "$GHOSTTY_HELPER" | grep -Fq "ghostty CLI helper stub"; then
+  echo "refusing placeholder Ghostty CLI helper" >&2
+  exit 1
+fi
 
 xattr -cr "$PERSONAL_APP"
 /usr/bin/codesign \
@@ -129,12 +135,22 @@ ACTUAL_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$PERSONA
 
 APP_BINARY="$PERSONAL_APP/Contents/MacOS/cmux"
 CLI_BINARY="$PERSONAL_APP/Contents/Resources/bin/cmux"
+DIFF_SIDECAR="$PERSONAL_APP/Contents/Resources/bin/cmux-diff-sidecar"
 [[ -x "$APP_BINARY" ]]
 [[ -x "$CLI_BINARY" ]]
 [[ -x "$GHOSTTY_HELPER" ]]
 lipo "$APP_BINARY" -verify_arch arm64
 lipo "$CLI_BINARY" -verify_arch arm64
 lipo "$GHOSTTY_HELPER" -verify_arch arm64
+./scripts/verify-diff-sidecar-artifact.sh "$DIFF_SIDECAR"
+SDK_VERSION="$(otool -l "$APP_BINARY" | awk '/LC_BUILD_VERSION/ { in_version=1; next } in_version && /sdk / { print $2; exit }')"
+[[ "$SDK_VERSION" == 26.* ]]
+CMUX_CLI_BIN="$CLI_BINARY" python3 tests/test_cli_version_memory_guard.py
+./scripts/verify-app-bundle-licenses.sh "$PERSONAL_APP"
+CMUX_SMOKE_ALLOW_UNSUPPORTED_GUI=1 CMUX_SMOKE_DEBUG_LOGS=1 \
+  ./scripts/smoke-launch-macos-app.sh "$PERSONAL_APP"
+CMUX_SMOKE_DIRECT_EXEC=1 CMUX_SMOKE_DEBUG_LOGS=1 \
+  ./scripts/smoke-launch-macos-app.sh "$PERSONAL_APP"
 
 ARCHIVE="$DIST_ROOT/$ARCHIVE_NAME"
 if [[ -e "$ARCHIVE" ]]; then

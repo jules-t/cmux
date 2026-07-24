@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import pathlib
+import plistlib
+import zipfile
 
 from personal.common import ControlError, load_json
+from personal.official_runtime_manifest import validate_official_runtime_manifest
 
 
 def sha256(path: pathlib.Path) -> str:
@@ -13,6 +17,93 @@ def sha256(path: pathlib.Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def require_arm64_macho(archive: zipfile.ZipFile, member: str) -> None:
+    try:
+        info = archive.getinfo(member)
+    except KeyError as exc:
+        raise ControlError(f"app archive is missing executable: {member}") from exc
+    mode = info.external_attr >> 16
+    if mode and mode & 0o111 == 0:
+        raise ControlError(f"app archive member is not executable: {member}")
+    with archive.open(info) as handle:
+        header = handle.read(8)
+    if len(header) != 8:
+        raise ControlError(f"app archive executable is truncated: {member}")
+    magic = int.from_bytes(header[:4], "little")
+    cpu_type = int.from_bytes(header[4:8], "little")
+    if magic != 0xFEEDFACF or cpu_type != 0x0100000C:
+        raise ControlError(f"app archive executable is not a thin arm64 Mach-O: {member}")
+
+
+def verify_archive_bundle(
+    archive_path: pathlib.Path,
+    *,
+    config: dict,
+    source_sha: str,
+    base_tag: str,
+    personal_tag: str,
+) -> None:
+    app_root = f"{config['app_name']}.app/Contents"
+    plist_member = f"{app_root}/Info.plist"
+    try:
+        with zipfile.ZipFile(archive_path) as archive:
+            for info in archive.infolist():
+                candidate = pathlib.PurePosixPath(info.filename)
+                if candidate.is_absolute() or ".." in candidate.parts:
+                    raise ControlError(f"app archive contains an unsafe path: {info.filename}")
+            try:
+                plist_payload = archive.read(plist_member)
+            except KeyError as exc:
+                raise ControlError("app archive has no Info.plist") from exc
+            try:
+                plist = plistlib.loads(plist_payload)
+            except plistlib.InvalidFileException as exc:
+                raise ControlError(f"app archive has an invalid Info.plist: {exc}") from exc
+            expected_plist = {
+                "CFBundleIdentifier": config["bundle_identifier"],
+                "CMUXPersonalSourceSHA": source_sha,
+                "CMUXPersonalBaseTag": base_tag,
+                "CMUXPersonalReleaseTag": personal_tag,
+            }
+            for key, expected in expected_plist.items():
+                if plist.get(key) != expected:
+                    raise ControlError(
+                        f"app archive {key} is {plist.get(key)!r}, expected {expected!r}"
+                    )
+            if "SUFeedURL" in plist or "SUPublicEDKey" in plist:
+                raise ControlError("app archive still contains the official Sparkle update identity")
+            raw_runtime_manifest = plist.get("CMUXRemoteDaemonManifestJSON")
+            if not isinstance(raw_runtime_manifest, str):
+                raise ControlError("app archive has no embedded remote runtime manifest")
+            try:
+                runtime_manifest = json.loads(raw_runtime_manifest)
+            except json.JSONDecodeError as exc:
+                raise ControlError(
+                    f"app archive has an invalid remote runtime manifest: {exc}"
+                ) from exc
+            if not isinstance(runtime_manifest, dict):
+                raise ControlError("app archive remote runtime manifest is not an object")
+            validate_official_runtime_manifest(
+                runtime_manifest,
+                repository=str(config["upstream_repository"]),
+                base_tag=base_tag,
+            )
+
+            binaries = [
+                f"{app_root}/MacOS/cmux",
+                f"{app_root}/Resources/bin/cmux",
+                f"{app_root}/Resources/bin/ghostty",
+                f"{app_root}/Resources/bin/cmux-diff-sidecar",
+            ]
+            for member in binaries:
+                require_arm64_macho(archive, member)
+            helper = archive.read(f"{app_root}/Resources/bin/ghostty")
+            if b"ghostty CLI helper stub" in helper:
+                raise ControlError("app archive contains the placeholder Ghostty CLI helper")
+    except zipfile.BadZipFile as exc:
+        raise ControlError(f"app archive is not a valid ZIP: {exc}") from exc
 
 
 def verify_assets(
@@ -34,6 +125,7 @@ def verify_assets(
     manifest = load_json(manifest_path)
     expected = {
         "repository": config["fork_repository"],
+        "upstream_repository": config["upstream_repository"],
         "bundle_identifier": config["bundle_identifier"],
         "architecture": config["architecture"],
         "archive_name": archive_name,
@@ -54,6 +146,13 @@ def verify_assets(
     checksum_fields = checksum_path.read_text(encoding="utf-8").strip().split()
     if checksum_fields != [digest, archive_name]:
         raise ControlError("checksum file does not match the archive")
+    verify_archive_bundle(
+        archive,
+        config=config,
+        source_sha=source_sha,
+        base_tag=base_tag,
+        personal_tag=personal_tag,
+    )
     return manifest
 
 

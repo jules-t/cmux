@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import pathlib
 import plistlib
 
 from personal.common import ControlError, load_json
+from personal.official_runtime_manifest import validate_official_runtime_manifest
 
 
 def patch_bundle_plist(
@@ -16,6 +18,7 @@ def patch_bundle_plist(
     source_sha: str,
     base_tag: str,
     personal_tag: str,
+    remote_daemon_manifest: dict,
 ) -> dict:
     plist["CFBundleName"] = app_name
     plist["CFBundleDisplayName"] = app_name
@@ -23,6 +26,11 @@ def patch_bundle_plist(
     plist["CMUXPersonalSourceSHA"] = source_sha
     plist["CMUXPersonalBaseTag"] = base_tag
     plist["CMUXPersonalReleaseTag"] = personal_tag
+    plist["CMUXRemoteDaemonManifestJSON"] = json.dumps(
+        remote_daemon_manifest,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
     plist.pop("SUFeedURL", None)
     plist.pop("SUPublicEDKey", None)
 
@@ -50,6 +58,7 @@ def main() -> int:
     parser.add_argument("--source-sha", required=True)
     parser.add_argument("--base-tag", required=True)
     parser.add_argument("--personal-tag", required=True)
+    parser.add_argument("--remote-daemon-manifest", required=True)
     args = parser.parse_args()
 
     config = load_json(args.config)
@@ -60,6 +69,11 @@ def main() -> int:
         plist = plistlib.load(handle)
     if not isinstance(plist, dict):
         raise ControlError("Info.plist root is not a dictionary")
+    remote_daemon_manifest = validate_official_runtime_manifest(
+        load_json(args.remote_daemon_manifest),
+        repository=str(config["upstream_repository"]),
+        base_tag=args.base_tag,
+    )
     patched = patch_bundle_plist(
         plist,
         app_name=str(config["app_name"]),
@@ -68,6 +82,7 @@ def main() -> int:
         source_sha=args.source_sha,
         base_tag=args.base_tag,
         personal_tag=args.personal_tag,
+        remote_daemon_manifest=remote_daemon_manifest,
     )
     with path.open("wb") as handle:
         plistlib.dump(patched, handle, fmt=plistlib.FMT_BINARY, sort_keys=False)

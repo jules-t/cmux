@@ -38,6 +38,12 @@ class SetupLocalTests(unittest.TestCase):
             self.assertTrue(
                 (home / ".local/share/cmux-personal/personal/local_updater.py").is_file()
             )
+            self.assertTrue(
+                (
+                    home
+                    / ".local/share/cmux-personal/personal/official_runtime_manifest.py"
+                ).is_file()
+            )
             launch_agent = (
                 home / "Library/LaunchAgents/com.jules.cmux-personal-updater.plist"
             )
