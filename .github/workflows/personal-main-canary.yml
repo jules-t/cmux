@@ -70,8 +70,15 @@ jobs:
       - name: Check out control plane
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: personal-control
+          ref: ${{ github.sha }}
           path: control
+          persist-credentials: false
+
+      - name: Check out current personal state
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: personal-control
+          path: state
           persist-credentials: false
 
       - name: Check out current personal source
@@ -89,7 +96,7 @@ jobs:
           UPSTREAM_SHA: ${{ needs.mirror.outputs.upstream_sha }}
         run: |
           set -euo pipefail
-          current_tag="$(python3 -c 'import json; print(json.load(open("control/personal/state.json"))["current_stable_tag"])')"
+          current_tag="$(python3 -c 'import json; print(json.load(open("state/personal/state.json"))["current_stable_tag"])')"
           git -C source remote add upstream https://github.com/manaflow-ai/cmux.git
           git -C source fetch --force upstream \
             main \
@@ -137,7 +144,7 @@ jobs:
       - name: Check out control plane
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: personal-control
+          ref: ${{ github.sha }}
           path: control
           persist-credentials: false
 
@@ -186,7 +193,7 @@ jobs:
       - name: Check out control plane
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: personal-control
+          ref: ${{ github.sha }}
           path: control
           persist-credentials: false
 
@@ -213,7 +220,7 @@ jobs:
       - name: Check out control plane
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: personal-control
+          ref: ${{ github.sha }}
           path: control
           persist-credentials: false
 

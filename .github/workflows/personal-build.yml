@@ -28,7 +28,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmux-personal-build
+  group: cmux-personal-stable-lifecycle
   cancel-in-progress: false
 
 jobs:
@@ -43,7 +43,7 @@ jobs:
       - name: Check out control plane
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: personal-control
+          ref: ${{ github.sha }}
           path: control
           persist-credentials: false
 
@@ -94,7 +94,7 @@ jobs:
       - name: Check out control plane
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: personal-control
+          ref: ${{ github.sha }}
           path: control
           persist-credentials: false
 
@@ -147,7 +147,7 @@ jobs:
       - name: Check out trusted control plane
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: personal-control
+          ref: ${{ github.sha }}
           path: control
           persist-credentials: false
 
@@ -189,11 +189,18 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Check out current control state
+      - name: Check out trusted control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+
+      - name: Check out current personal state
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: personal-control
-          path: control
+          path: state
 
       - name: Download verified build assets
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
@@ -245,17 +252,17 @@ jobs:
         run: |
           set -euo pipefail
           python3 control/personal/state_manager.py promote \
-            --state control/personal/state.json \
+            --state state/personal/state.json \
             --base-tag "${{ needs.metadata.outputs.base_tag }}" \
             --personal-tag "${{ needs.metadata.outputs.personal_tag }}" \
             --source-sha "${{ needs.metadata.outputs.source_sha }}" \
             --run-id "$GITHUB_RUN_ID"
-          git -C control config user.name "cmux Personal automation"
-          git -C control config user.email "actions@users.noreply.github.com"
-          git -C control add personal/state.json
-          if ! git -C control diff --cached --quiet; then
-            git -C control commit -m "chore(personal): record ${{ needs.metadata.outputs.personal_tag }}"
-            git -C control push origin personal-control
+          git -C state config user.name "cmux Personal automation"
+          git -C state config user.email "actions@users.noreply.github.com"
+          git -C state add personal/state.json
+          if ! git -C state diff --cached --quiet; then
+            git -C state commit -m "chore(personal): record ${{ needs.metadata.outputs.personal_tag }}"
+            git -C state push origin personal-control
           fi
 
   report-failure:
@@ -269,7 +276,7 @@ jobs:
       - name: Check out control plane
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: personal-control
+          ref: ${{ github.sha }}
           path: control
           persist-credentials: false
 

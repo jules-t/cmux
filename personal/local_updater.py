@@ -311,15 +311,63 @@ def install_app(
     prune_backups(backups)
 
 
-def current_tag(state_path: pathlib.Path) -> str | None:
+def install_state(state_path: pathlib.Path) -> dict[str, Any]:
     if not state_path.is_file():
-        return None
+        return {}
     try:
         value = load_json(state_path)
     except (ControlError, OSError, json.JSONDecodeError):
-        return None
-    tag = value.get("personal_tag")
-    return tag if isinstance(tag, str) else None
+        return {}
+    return value
+
+
+def installation_status(
+    *,
+    destination: pathlib.Path,
+    state: dict[str, Any],
+    expected_bundle_identifier: str,
+    expected_personal_tag: str,
+) -> tuple[bool, str | None, str | None, str]:
+    state_tag = state.get("personal_tag")
+    normalized_state_tag = state_tag if isinstance(state_tag, str) else None
+    bundle_tag = existing_bundle_tag(destination, expected_bundle_identifier)
+    if normalized_state_tag != expected_personal_tag:
+        return (
+            False,
+            normalized_state_tag,
+            bundle_tag,
+            "the updater state does not match the latest release",
+        )
+    if bundle_tag != expected_personal_tag:
+        return (
+            False,
+            normalized_state_tag,
+            bundle_tag,
+            "the installed app is missing or does not match the updater state",
+        )
+    source_sha = state.get("source_sha")
+    if not isinstance(source_sha, str) or not source_sha:
+        return (
+            False,
+            normalized_state_tag,
+            bundle_tag,
+            "the updater state has no source commit",
+        )
+    try:
+        inspect_bundle(
+            destination,
+            expected_bundle_identifier=expected_bundle_identifier,
+            expected_source_sha=source_sha,
+            expected_personal_tag=expected_personal_tag,
+        )
+    except ControlError as exc:
+        return (
+            False,
+            normalized_state_tag,
+            bundle_tag,
+            f"the installed app failed verification: {exc}",
+        )
+    return True, normalized_state_tag, bundle_tag, "the installed app is verified"
 
 
 def main() -> int:
@@ -347,13 +395,31 @@ def main() -> int:
     tag = str(release["tag_name"])
 
     state_path = data_root / "current.json"
-    installed = current_tag(state_path)
+    destination = validate_install_destination(str(config["install_path"]))
+    verified_current, state_tag, bundle_tag, status_detail = installation_status(
+        destination=destination,
+        state=install_state(state_path),
+        expected_bundle_identifier=str(config["bundle_identifier"]),
+        expected_personal_tag=tag,
+    )
     if args.check_only:
-        print(json.dumps({"latest": tag, "installed": installed, "update_available": tag != installed}))
+        print(
+            json.dumps(
+                {
+                    "latest": tag,
+                    "state_tag": state_tag,
+                    "bundle_tag": bundle_tag,
+                    "verified_current": verified_current,
+                    "update_available": not verified_current,
+                    "detail": status_detail,
+                }
+            )
+        )
         return 0
-    if installed == tag:
+    if verified_current:
         print(f"cmux Personal is current at {tag}")
         return 0
+    print(f"cmux Personal requires installation: {status_detail}")
 
     assets = release_assets(release)
     archive_name = str(config["artifact_name"])
@@ -408,7 +474,6 @@ def main() -> int:
             expected_source_sha=str(manifest["source_sha"]),
             expected_personal_tag=tag,
         )
-        destination = validate_install_destination(str(config["install_path"]))
         install_app(
             app,
             destination=destination,

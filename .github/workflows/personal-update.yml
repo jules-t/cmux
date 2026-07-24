@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmux-personal-stable-update
+  group: cmux-personal-stable-lifecycle
   cancel-in-progress: false
 
 jobs:
@@ -29,15 +29,23 @@ jobs:
       target_tag: ${{ steps.observe.outputs.target_tag }}
       current_tag: ${{ steps.observe.outputs.current_tag }}
     steps:
-      - name: Check out control plane
+      - name: Check out trusted control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+
+      - name: Check out current personal state
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: personal-control
+          path: state
 
       - name: Observe official stable release
         id: observe
         env:
-          PYTHONPATH: ${{ github.workspace }}
+          PYTHONPATH: ${{ github.workspace }}/control
           TARGET_TAG: ${{ inputs.target_tag }}
         run: |
           set -euo pipefail
@@ -45,21 +53,21 @@ jobs:
           if [[ -n "${TARGET_TAG:-}" ]]; then
             args+=(--target-tag "$TARGET_TAG" --retry)
           fi
-          python3 personal/release_monitor.py \
-            --config personal/config.json \
-            --state personal/state.json \
+          python3 control/personal/release_monitor.py \
+            --config control/personal/config.json \
+            --state state/personal/state.json \
             --output "$RUNNER_TEMP/release-observation.json" \
             "${args[@]}"
 
       - name: Persist observation
         run: |
           set -euo pipefail
-          git config user.name "cmux Personal automation"
-          git config user.email "actions@users.noreply.github.com"
-          git add personal/state.json
-          if ! git diff --cached --quiet; then
-            git commit -m "chore(personal): record stable release observation"
-            git push origin personal-control
+          git -C state config user.name "cmux Personal automation"
+          git -C state config user.email "actions@users.noreply.github.com"
+          git -C state add personal/state.json
+          if ! git -C state diff --cached --quiet; then
+            git -C state commit -m "chore(personal): record stable release observation"
+            git -C state push origin personal-control
           fi
 
   prepare:
@@ -79,7 +87,7 @@ jobs:
       - name: Check out control plane
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: personal-control
+          ref: ${{ github.sha }}
           path: control
           persist-credentials: false
 
@@ -167,7 +175,7 @@ jobs:
       - name: Check out control plane without write credentials
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: personal-control
+          ref: ${{ github.sha }}
           path: control
           persist-credentials: false
 
@@ -264,7 +272,7 @@ jobs:
       - name: Check out control plane
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: personal-control
+          ref: ${{ github.sha }}
           path: control
           persist-credentials: false
 
@@ -320,11 +328,18 @@ jobs:
       actions: write
       contents: write
     steps:
-      - name: Check out current control state
+      - name: Check out trusted control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+
+      - name: Check out current personal state
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: personal-control
-          path: control
+          path: state
 
       - name: Download clean candidate
         if: ${{ needs.prepare.outputs.status == 'clean' }}
@@ -378,15 +393,15 @@ jobs:
             -f promote_source=true \
             -f publish_release=true
           python3 control/personal/state_manager.py mark-attempt \
-            --state control/personal/state.json \
+            --state state/personal/state.json \
             --tag "$TARGET_TAG" \
             --status dispatched \
             --run-id "$GITHUB_RUN_ID"
-          git -C control config user.name "cmux Personal automation"
-          git -C control config user.email "actions@users.noreply.github.com"
-          git -C control add personal/state.json
-          git -C control commit -m "chore(personal): dispatch update for $TARGET_TAG"
-          git -C control push origin personal-control
+          git -C state config user.name "cmux Personal automation"
+          git -C state config user.email "actions@users.noreply.github.com"
+          git -C state add personal/state.json
+          git -C state commit -m "chore(personal): dispatch update for $TARGET_TAG"
+          git -C state push origin personal-control
 
   report-blocked:
     if: ${{ always() && (needs.monitor.result == 'failure' || (needs.monitor.outputs.ready == 'true' && needs.dispatch.result != 'success')) }}
@@ -399,7 +414,7 @@ jobs:
       - name: Check out control plane
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: personal-control
+          ref: ${{ github.sha }}
           path: control
           persist-credentials: false
 

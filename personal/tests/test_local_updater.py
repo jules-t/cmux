@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import pathlib
+import tempfile
 import unittest
+from unittest import mock
 
 from personal.common import ControlError
-from personal.local_updater import release_key, select_release, validate_install_destination
+from personal.local_updater import (
+    installation_status,
+    release_key,
+    select_release,
+    validate_install_destination,
+)
 
 
 class LocalUpdaterTests(unittest.TestCase):
@@ -38,6 +46,64 @@ class LocalUpdaterTests(unittest.TestCase):
         )
         with self.assertRaises(ControlError):
             validate_install_destination("/Applications/cmux.app")
+
+    def test_state_file_alone_cannot_make_an_absent_app_current(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            current, state_tag, bundle_tag, detail = installation_status(
+                destination=pathlib.Path(temporary) / "cmux Personal.app",
+                state={
+                    "personal_tag": "personal-v0.64.20-r1",
+                    "source_sha": "a" * 40,
+                },
+                expected_bundle_identifier="com.cmuxterm.app.staging.personal",
+                expected_personal_tag="personal-v0.64.20-r1",
+            )
+        self.assertFalse(current)
+        self.assertEqual(state_tag, "personal-v0.64.20-r1")
+        self.assertIsNone(bundle_tag)
+        self.assertIn("missing", detail)
+
+    @mock.patch("personal.local_updater.inspect_bundle")
+    @mock.patch("personal.local_updater.existing_bundle_tag")
+    def test_current_app_requires_live_bundle_verification(
+        self,
+        existing_bundle_tag: mock.Mock,
+        inspect_bundle: mock.Mock,
+    ) -> None:
+        existing_bundle_tag.return_value = "personal-v0.64.20-r1"
+        current, _, _, detail = installation_status(
+            destination=pathlib.Path("/tmp/cmux Personal.app"),
+            state={
+                "personal_tag": "personal-v0.64.20-r1",
+                "source_sha": "a" * 40,
+            },
+            expected_bundle_identifier="com.cmuxterm.app.staging.personal",
+            expected_personal_tag="personal-v0.64.20-r1",
+        )
+        self.assertTrue(current)
+        self.assertEqual(detail, "the installed app is verified")
+        inspect_bundle.assert_called_once()
+
+    @mock.patch("personal.local_updater.inspect_bundle")
+    @mock.patch("personal.local_updater.existing_bundle_tag")
+    def test_invalid_current_app_is_reinstalled(
+        self,
+        existing_bundle_tag: mock.Mock,
+        inspect_bundle: mock.Mock,
+    ) -> None:
+        existing_bundle_tag.return_value = "personal-v0.64.20-r1"
+        inspect_bundle.side_effect = ControlError("invalid signature")
+        current, _, _, detail = installation_status(
+            destination=pathlib.Path("/tmp/cmux Personal.app"),
+            state={
+                "personal_tag": "personal-v0.64.20-r1",
+                "source_sha": "a" * 40,
+            },
+            expected_bundle_identifier="com.cmuxterm.app.staging.personal",
+            expected_personal_tag="personal-v0.64.20-r1",
+        )
+        self.assertFalse(current)
+        self.assertIn("invalid signature", detail)
 
 
 if __name__ == "__main__":
