@@ -20,4 +20,3 @@ struct TerminalViewportInputs {
     let viewportNegotiationUnsettled: Bool
 }
 #endif
-
