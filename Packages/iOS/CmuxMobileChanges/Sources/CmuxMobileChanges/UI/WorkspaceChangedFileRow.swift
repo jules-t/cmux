@@ -14,17 +14,17 @@ struct WorkspaceChangedFileRow: View {
                 // magnitude, and only exceptional kinds get a quiet text badge
                 // so ordinary modified rows stay completely calm.
                 HStack(spacing: 6) {
-                    pathText
-                        .lineLimit(snapshot.file.kind == .renamed ? 2 : 1)
-                        .truncationMode(.head)
                     if let badge = snapshot.file.kind.badge {
                         badgeView(badge)
                     }
+                    pathText
+                        .lineLimit(snapshot.file.kind == .renamed ? 2 : 1)
+                        .truncationMode(.head)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .trailing, spacing: 5) {
                     if snapshot.file.isBinary {
-                        Text(String(localized: "changes.binary.badge", defaultValue: "BIN", bundle: .module))
+                        Text(String(localized: "changes.binary.badge", defaultValue: "Binary", bundle: .module))
                             .font(.caption2.weight(.bold))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
