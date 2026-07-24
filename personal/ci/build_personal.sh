@@ -79,6 +79,9 @@ fi
 mkdir -p "$PRESERVED_ROOT"
 ditto "$BUILT_APP" "$PRESERVED_APP"
 
+CMUX_XCODEBUILD_NONINTERACTIVE_IDLE_TIMEOUT_SECONDS=1800 \
+CMUX_XCODEBUILD_NONINTERACTIVE_POST_TEST_TIMEOUT_SECONDS=180 \
+CMUX_APP_HOST_XCODEBUILD_ATTEMPTS=2 \
 GITHUB_WORKSPACE="$SOURCE_ROOT" \
   "$SOURCE_ROOT/scripts/ci/run-in-console-session.sh" \
   "$SOURCE_ROOT/scripts/ci/run-app-host-xcodebuild.sh" \
@@ -89,6 +92,8 @@ GITHUB_WORKSPACE="$SOURCE_ROOT" \
   -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
   -destination "platform=macOS" \
   CMUX_SKIP_ZIG_BUILD=1 \
+  ARCHS=arm64 \
+  ONLY_ACTIVE_ARCH=YES \
   -only-testing:cmuxTests/FilePreviewSyntaxHighlighterTests \
   -only-testing:cmuxTests/FilePreviewSyntaxHighlightSettingsFileStoreTests \
   test
