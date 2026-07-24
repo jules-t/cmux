@@ -84,8 +84,43 @@ jobs:
             --base-tag "${{ steps.metadata.outputs.base_tag }}" \
             --output "$RUNNER_TEMP/release-name.json"
 
-  build:
+  ghostty_helper:
     needs: metadata
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out exact personal source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.metadata.outputs.source_sha }}
+          path: source
+          fetch-depth: 1
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Build real arm64 Ghostty CLI helper on macOS 15
+        working-directory: source
+        run: |
+          set -euo pipefail
+          ./scripts/install-zig-ci.sh
+          mkdir -p "$RUNNER_TEMP/ghostty-helper"
+          ./scripts/build-ghostty-cli-helper.sh \
+            --target aarch64-macos \
+            --output "$RUNNER_TEMP/ghostty-helper/ghostty"
+          lipo "$RUNNER_TEMP/ghostty-helper/ghostty" -verify_arch arm64
+
+      - name: Upload real Ghostty CLI helper
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cmux-personal-ghostty-helper-${{ needs.metadata.outputs.personal_tag }}
+          path: ${{ runner.temp }}/ghostty-helper/ghostty
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    needs: [metadata, ghostty_helper]
     runs-on: macos-26
     timeout-minutes: 120
     permissions:
@@ -113,6 +148,12 @@ jobs:
           CMUX_CI_REQUIRED_MACOS_SDK_MAJOR: "26"
         run: ./scripts/select-ci-xcode.sh
 
+      - name: Download real Ghostty CLI helper
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: cmux-personal-ghostty-helper-${{ needs.metadata.outputs.personal_tag }}
+          path: ghostty-helper
+
       - name: Build, test, isolate, and package
         env:
           SWIFT_BACKTRACE: "interactive=no,timeout=0s,symbolicate=off,color=no"
@@ -125,7 +166,8 @@ jobs:
             "$RUNNER_TEMP/derived-data" \
             "${{ needs.metadata.outputs.source_sha }}" \
             "${{ needs.metadata.outputs.base_tag }}" \
-            "${{ needs.metadata.outputs.personal_tag }}"
+            "${{ needs.metadata.outputs.personal_tag }}" \
+            "$GITHUB_WORKSPACE/ghostty-helper/ghostty"
 
       - name: Upload isolated build assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -266,8 +308,8 @@ jobs:
           fi
 
   report-failure:
-    if: ${{ always() && (needs.metadata.result == 'failure' || needs.build.result == 'failure' || needs.attest.result == 'failure' || needs.publish.result == 'failure') }}
-    needs: [metadata, build, attest, publish]
+    if: ${{ always() && (needs.metadata.result == 'failure' || needs.ghostty_helper.result == 'failure' || needs.build.result == 'failure' || needs.attest.result == 'failure' || needs.publish.result == 'failure') }}
+    needs: [metadata, ghostty_helper, build, attest, publish]
     runs-on: ubuntu-24.04
     permissions:
       contents: read

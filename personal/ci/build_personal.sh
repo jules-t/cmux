@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 7 ]]; then
-  echo "usage: $0 <source-root> <control-root> <dist-root> <derived-data> <source-sha> <base-tag> <personal-tag>" >&2
+if [[ $# -ne 8 ]]; then
+  echo "usage: $0 <source-root> <control-root> <dist-root> <derived-data> <source-sha> <base-tag> <personal-tag> <ghostty-helper>" >&2
   exit 2
 fi
 
@@ -13,6 +13,7 @@ DERIVED_DATA="$4"
 SOURCE_SHA="$5"
 BASE_TAG="$6"
 PERSONAL_TAG="$7"
+GHOSTTY_HELPER_SOURCE="$(cd "$(dirname "$8")" && pwd)/$(basename "$8")"
 CONFIG="$CONTROL_ROOT/personal/config.json"
 
 APP_NAME="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["app_name"])' "$CONFIG")"
@@ -41,7 +42,6 @@ xcrun swiftc \
   -o "$SMOKE_BINARY"
 "$SMOKE_BINARY"
 
-./scripts/install-zig-ci.sh
 ./scripts/install-rust-ci.sh
 export PATH="$HOME/.cargo/bin:$PATH"
 ./scripts/download-prebuilt-ghosttykit.sh
@@ -104,10 +104,13 @@ python3 "$CONTROL_ROOT/personal/package_bundle.py" \
   --base-tag "$BASE_TAG" \
   --personal-tag "$PERSONAL_TAG"
 
-GHOSTTY_HELPER="$PERSONAL_APP/Contents/Resources/bin/ghostty"
-if [[ ! -x "$GHOSTTY_HELPER" ]]; then
-  ./scripts/build-ghostty-cli-helper.sh --output "$GHOSTTY_HELPER"
+if [[ ! -f "$GHOSTTY_HELPER_SOURCE" || ! -x "$GHOSTTY_HELPER_SOURCE" ]]; then
+  echo "real Ghostty CLI helper is missing or non-executable: $GHOSTTY_HELPER_SOURCE" >&2
+  exit 1
 fi
+GHOSTTY_HELPER="$PERSONAL_APP/Contents/Resources/bin/ghostty"
+install -m 755 "$GHOSTTY_HELPER_SOURCE" "$GHOSTTY_HELPER"
+lipo "$GHOSTTY_HELPER" -verify_arch arm64
 
 xattr -cr "$PERSONAL_APP"
 /usr/bin/codesign \
