@@ -28,5 +28,13 @@ class BuildScriptTests(unittest.TestCase):
         script = self._script()
 
         self.assertIn('TEST_DERIVED_DATA="${DERIVED_DATA}-tests"', script)
-        self.assertEqual(script.count('-derivedDataPath "$DERIVED_DATA"'), 1)
+        self.assertEqual(script.count('-derivedDataPath "$DERIVED_DATA"'), 2)
         self.assertEqual(script.count('-derivedDataPath "$TEST_DERIVED_DATA"'), 1)
+
+    def test_package_downloads_are_retried_before_offline_builds(self) -> None:
+        script = self._script()
+
+        self.assertIn("for attempt in 1 2 3; do", script)
+        self.assertIn("-resolvePackageDependencies", script)
+        self.assertIn("failed to resolve Swift packages after 3 attempts", script)
+        self.assertEqual(script.count("-disableAutomaticPackageResolution"), 2)

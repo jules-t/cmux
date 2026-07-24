@@ -50,6 +50,30 @@ export PATH="$HOME/.cargo/bin:$PATH"
 
 SOURCE_PACKAGES_DIR="${RUNNER_TEMP:-/tmp}/cmux-personal-spm"
 mkdir -p "$SOURCE_PACKAGES_DIR"
+
+for attempt in 1 2 3; do
+  if xcodebuild \
+    -project cmux.xcodeproj \
+    -scheme cmux \
+    -configuration Release \
+    -derivedDataPath "$DERIVED_DATA" \
+    -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
+    -resolvePackageDependencies; then
+    if [[ -d "$SOURCE_PACKAGES_DIR/artifacts/sparkle/Sparkle/Sparkle.xcframework" &&
+          -d "$SOURCE_PACKAGES_DIR/artifacts/sentry-cocoa/Sentry/Sentry.xcframework" ]]; then
+      break
+    fi
+    echo "package resolution completed without required binary artifacts; clearing the package cache" >&2
+    rm -rf "$SOURCE_PACKAGES_DIR"
+  fi
+  if [[ "$attempt" -eq 3 ]]; then
+    echo "failed to resolve Swift packages after 3 attempts" >&2
+    exit 1
+  fi
+  echo "package resolution failed on attempt $attempt; retrying" >&2
+  sleep $((attempt * 5))
+done
+
 CMUX_SKIP_ZIG_BUILD=1 xcodebuild \
   -project cmux.xcodeproj \
   -scheme cmux \
@@ -57,6 +81,7 @@ CMUX_SKIP_ZIG_BUILD=1 xcodebuild \
   -destination 'generic/platform=macOS' \
   -derivedDataPath "$DERIVED_DATA" \
   -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
+  -disableAutomaticPackageResolution \
   ARCHS=arm64 \
   ONLY_ACTIVE_ARCH=YES \
   CODE_SIGNING_ALLOWED=NO \
@@ -91,6 +116,7 @@ GITHUB_WORKSPACE="$SOURCE_ROOT" \
   -configuration Release \
   -derivedDataPath "$TEST_DERIVED_DATA" \
   -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
+  -disableAutomaticPackageResolution \
   -destination "platform=macOS" \
   CMUX_SKIP_ZIG_BUILD=1 \
   ARCHS=arm64 \
