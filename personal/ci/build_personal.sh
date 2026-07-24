@@ -113,7 +113,7 @@ GITHUB_WORKSPACE="$SOURCE_ROOT" \
   "$SOURCE_ROOT/scripts/ci/run-app-host-xcodebuild.sh" \
   -project cmux.xcodeproj \
   -scheme cmux-unit \
-  -configuration Release \
+  -configuration Debug \
   -derivedDataPath "$TEST_DERIVED_DATA" \
   -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
   -disableAutomaticPackageResolution \

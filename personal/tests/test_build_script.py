@@ -38,3 +38,12 @@ class BuildScriptTests(unittest.TestCase):
         self.assertIn("-resolvePackageDependencies", script)
         self.assertIn("failed to resolve Swift packages after 3 attempts", script)
         self.assertEqual(script.count("-disableAutomaticPackageResolution"), 2)
+
+    def test_app_is_release_but_unit_tests_use_upstream_debug_configuration(self) -> None:
+        script = self._script()
+
+        self.assertEqual(script.count("-configuration Release"), 2)
+        self.assertIn(
+            "-scheme cmux-unit \\\n  -configuration Debug",
+            script,
+        )
