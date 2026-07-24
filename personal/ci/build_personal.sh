@@ -79,8 +79,9 @@ fi
 mkdir -p "$PRESERVED_ROOT"
 ditto "$BUILT_APP" "$PRESERVED_APP"
 
-scripts/ci/run-in-console-session.sh \
-  scripts/ci/run-app-host-xcodebuild.sh \
+GITHUB_WORKSPACE="$SOURCE_ROOT" \
+  "$SOURCE_ROOT/scripts/ci/run-in-console-session.sh" \
+  "$SOURCE_ROOT/scripts/ci/run-app-host-xcodebuild.sh" \
   -project cmux.xcodeproj \
   -scheme cmux-unit \
   -configuration Release \
