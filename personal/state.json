@@ -15,10 +15,10 @@
     "updated_at": null
   },
   "last_check": {
-    "status": "seeded",
+    "status": "current",
     "appcast_tag": "v0.64.20",
     "github_tag": "v0.64.20",
-    "checked_at": null,
-    "detail": "Seeded from the official cmux v0.64.20 release."
+    "checked_at": "2026-07-24T14:21:30Z",
+    "detail": "v0.64.20 is still the latest stable release"
   }
 }
