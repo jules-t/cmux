@@ -59,6 +59,9 @@ final class ShareSessionController {
     private(set) var status: Status = .idle
     private(set) var shareUrl: String?
     private(set) var code: String?
+    private(set) var shareDeploymentID: String?
+    private(set) var shareProtocolVersion: Int?
+    private(set) var terminalTransportVersion: Int?
     private(set) var participants: [ShareParticipant] = []
     private(set) var feed: [ShareFeedItem] = []
     private(set) var lastErrorText: String?
@@ -175,8 +178,10 @@ final class ShareSessionController {
             showChatWindow()
             return
         }
-        showChatWindow()
         lastErrorText = nil
+        if let ownerWindow = tabManager.window {
+            showChatWindow(ownerWindow: ownerWindow)
+        }
         guard tabManager.selectedTabId == focusedWorkspace.id,
               tabManager.tabs.contains(where: { $0 === focusedWorkspace }) else {
             lastErrorText = String(
@@ -282,6 +287,12 @@ final class ShareSessionController {
         startTask = nil
         code = created.code
         shareUrl = created.shareUrl
+        shareDeploymentID = created.deploymentId
+        shareProtocolVersion = created.protocolVersion
+        terminalTransportVersion = created.terminalTransportVersion
+        shareSessionLogger.info(
+            "Starting share deployment \(created.deploymentId, privacy: .public), protocol \(created.protocolVersion, privacy: .public), terminal transport \(created.terminalTransportVersion, privacy: .public)"
+        )
         copyShareLink()
         wireCursorOverlay()
         streamer.sendBinary = { [weak self] data in
@@ -295,6 +306,11 @@ final class ShareSessionController {
             endpoint: ShareSocket.Endpoint(wsUrl: created.wsUrl, token: created.token),
             refresh: {
                 let refreshed = try await api.hostToken(code: code)
+                guard refreshed.deploymentId == created.deploymentId else {
+                    throw ShareSessionAPIError.malformedResponse(
+                        "share deployment changed during the session"
+                    )
+                }
                 return ShareSocket.Endpoint(wsUrl: refreshed.wsUrl, token: refreshed.token)
             }
         )
@@ -318,6 +334,15 @@ final class ShareSessionController {
                     }
                     await self.handleServerText(
                         text,
+                        connection: connection,
+                        sequence: sequence
+                    )
+                case .binary(let data, let connection, let sequence):
+                    guard self.activeSocketConnection == connection else {
+                        continue
+                    }
+                    self.handleServerBinary(
+                        data,
                         connection: connection,
                         sequence: sequence
                     )
@@ -375,6 +400,9 @@ final class ShareSessionController {
         status = .idle
         code = nil
         shareUrl = nil
+        shareDeploymentID = nil
+        shareProtocolVersion = nil
+        terminalTransportVersion = nil
         participants = []
         feed = []
         sharedWorkspaceIDs = []
@@ -395,9 +423,25 @@ final class ShareSessionController {
     // MARK: - Chat window actions
 
     private func showChatWindow() {
-        let window = chatWindow ?? ShareChatWindowController(controller: self)
-        chatWindow = window
-        window.show()
+        guard let ownerWindow = tabManager?.window else {
+            chatWindow?.show()
+            return
+        }
+        showChatWindow(ownerWindow: ownerWindow)
+    }
+
+    private func showChatWindow(ownerWindow: NSWindow) {
+        if let chatWindow, chatWindow.isOwned(by: ownerWindow) {
+            chatWindow.show()
+            return
+        }
+        chatWindow?.close()
+        let nextWindow = ShareChatWindowController(
+            controller: self,
+            ownerWindow: ownerWindow
+        )
+        chatWindow = nextWindow
+        nextWindow.show()
     }
 
     func showSessionPanel() {
@@ -607,6 +651,60 @@ final class ShareSessionController {
 
     // MARK: - Inbound
 
+    private func handleServerBinary(
+        _ data: Data,
+        connection: UInt64,
+        sequence: UInt64
+    ) {
+        guard socket?.beginAcknowledgementBarrier(
+            connection: connection
+        ) == true else {
+            acknowledgementGate.recordPayload(
+                accepted: false,
+                sequence: sequence
+            )
+            shouldTeardownAfterAcknowledgement = false
+            pendingResyncHello = nil
+            return
+        }
+
+        guard let frame = try? WorkspaceShareTerminalFrame.decode(data),
+              frame.kind == .forwardedInput,
+              let user = frame.userID else {
+            rejectServerPayload(connection: connection, sequence: sequence)
+            return
+        }
+
+        shouldTeardownAfterAcknowledgement = false
+        pendingResyncHello = nil
+        let accepted = applyGuestInput(
+            user: user,
+            ws: frame.workspaceID,
+            pane: frame.paneID,
+            data: frame.bytes
+        )
+        acknowledgementGate.recordPayload(
+            accepted: accepted,
+            sequence: sequence
+        )
+        if !accepted {
+            socket?.discardAcknowledgementBarrier(connection: connection)
+        }
+    }
+
+    private func rejectServerPayload(
+        connection: UInt64,
+        sequence: UInt64
+    ) {
+        socket?.discardAcknowledgementBarrier(connection: connection)
+        acknowledgementGate.recordPayload(
+            accepted: false,
+            sequence: sequence
+        )
+        shouldTeardownAfterAcknowledgement = false
+        pendingResyncHello = nil
+    }
+
     private func handleServerText(
         _ text: String,
         connection: UInt64,
@@ -800,7 +898,12 @@ final class ShareSessionController {
         case .chat(let message):
             return appendChat(message)
         case .guestInput(let user, let ws, let pane, let data):
-            return applyGuestInput(user: user, ws: ws, pane: pane, data: data)
+            return applyGuestInput(
+                user: user,
+                ws: ws,
+                pane: pane,
+                data: Data(data.utf8)
+            )
         case .guestSub(let ws, let pane, let count):
             return routeGuestSub(ws: ws, pane: pane, count: count)
         case .resync:
@@ -952,7 +1055,12 @@ final class ShareSessionController {
     /// Applies guest terminal input. The host is the only input authority:
     /// the workspace must be in the shared set and the sender's locally-known
     /// role must be `editor`, regardless of what the DO forwarded.
-    private func applyGuestInput(user: String, ws: String, pane: String, data: String) -> Bool {
+    private func applyGuestInput(
+        user: String,
+        ws: String,
+        pane: String,
+        data: Data
+    ) -> Bool {
         guard !data.isEmpty,
               let wsUUID = UUID(uuidString: ws),
               let tabManager,
@@ -960,7 +1068,10 @@ final class ShareSessionController {
               workspace.id == wsUUID,
               let paneUUID = UUID(uuidString: pane),
               let terminalPanel = workspace.terminalPanel(for: paneUUID),
-              let role = participant(user)?.role else {
+              let participant = participant(user),
+              participant.connected,
+              !participant.isHost,
+              let role = participant.role else {
             return false
         }
         let currentTerminalPaneIDs = workspace.panels.values.compactMap {
@@ -975,11 +1086,15 @@ final class ShareSessionController {
         ) else {
             return false
         }
-        if terminalPanel.surface.sendInputResult(data) == .sent {
+        switch terminalPanel.surface.sendInputBytesResult(data) {
+        case .sent:
             terminalPanel.surface.forceRefresh(reason: "share.guestInput")
             return true
+        case .queued:
+            return true
+        case .surfaceUnavailable, .processExited, .inputQueueFull:
+            return false
         }
-        return false
     }
 
     /// Routes subscription demand only to a current terminal pane in the one
