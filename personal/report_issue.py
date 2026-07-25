@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 
 from personal.common import ControlError
@@ -44,6 +43,19 @@ def main() -> int:
     issues = json.loads(existing.stdout)
     match = next((issue for issue in issues if issue.get("title") == args.title), None)
     if match:
+        edited = gh(
+            "issue",
+            "edit",
+            str(match["number"]),
+            "--repo",
+            args.repo,
+            "--body",
+            args.body,
+            check=False,
+        )
+        if edited.returncode != 0:
+            detail = edited.stderr.strip() or edited.stdout.strip()
+            print(f"warning: could not refresh issue body: {detail}")
         gh(
             "issue",
             "comment",

@@ -5,7 +5,13 @@ import subprocess
 import tempfile
 import unittest
 
-from personal.candidate_manager import create_bundle, make_baseline, rebase_candidate, verify_candidate
+from personal.candidate_manager import (
+    create_bundle,
+    make_baseline,
+    publish_candidate,
+    rebase_candidate,
+    verify_candidate,
+)
 
 
 POLICY = {
@@ -84,6 +90,18 @@ class CandidateManagerTests(unittest.TestCase):
             stderr=subprocess.PIPE,
         )
         self.assertEqual(command(clone, "rev-parse", "HEAD"), verification["candidate_commit"])
+        remote = self.repo / ".published.git"
+        command(self.repo, "init", "--bare", str(remote))
+        publish_candidate(
+            clone,
+            remote_url=str(remote),
+            candidate_branch="candidate/personal-v1.0.1",
+            expected_commit=verification["candidate_commit"],
+        )
+        self.assertEqual(
+            command(remote, "rev-parse", "refs/heads/candidate/personal-v1.0.1"),
+            verification["candidate_commit"],
+        )
 
     def test_conflicting_source_change_is_reported(self) -> None:
         command(self.repo, "switch", "personal/stable")

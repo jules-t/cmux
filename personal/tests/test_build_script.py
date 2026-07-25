@@ -47,3 +47,10 @@ class BuildScriptTests(unittest.TestCase):
             "-scheme cmux-unit \\\n  -configuration Debug",
             script,
         )
+
+    def test_downloaded_ghostty_helper_does_not_need_artifact_mode_bits(self) -> None:
+        script = self._script()
+
+        self.assertNotIn('! -x "$GHOSTTY_HELPER_SOURCE"', script)
+        self.assertIn('lipo "$GHOSTTY_HELPER_SOURCE" -verify_arch arm64', script)
+        self.assertIn('install -m 755 "$GHOSTTY_HELPER_SOURCE" "$GHOSTTY_HELPER"', script)

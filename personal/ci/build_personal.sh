@@ -24,6 +24,18 @@ BUNDLE_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["bu
 ARCHIVE_NAME="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["artifact_name"])' "$CONFIG")"
 MANIFEST_NAME="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["manifest_name"])' "$CONFIG")"
 
+if [[ ! -f "$GHOSTTY_HELPER_SOURCE" ]]; then
+  echo "real Ghostty CLI helper is missing: $GHOSTTY_HELPER_SOURCE" >&2
+  exit 1
+fi
+# GitHub artifact downloads intentionally normalize regular files to mode 0644.
+# Validate the payload itself here; install(1) restores its executable mode below.
+lipo "$GHOSTTY_HELPER_SOURCE" -verify_arch arm64
+if strings "$GHOSTTY_HELPER_SOURCE" | grep -Fq "ghostty CLI helper stub"; then
+  echo "refusing placeholder Ghostty CLI helper" >&2
+  exit 1
+fi
+
 mkdir -p "$DIST_ROOT" "$DERIVED_DATA" "$TEST_DERIVED_DATA"
 cd "$SOURCE_ROOT"
 
@@ -140,10 +152,6 @@ python3 "$CONTROL_ROOT/personal/package_bundle.py" \
   --personal-tag "$PERSONAL_TAG" \
   --remote-daemon-manifest "$REMOTE_DAEMON_MANIFEST"
 
-if [[ ! -f "$GHOSTTY_HELPER_SOURCE" || ! -x "$GHOSTTY_HELPER_SOURCE" ]]; then
-  echo "real Ghostty CLI helper is missing or non-executable: $GHOSTTY_HELPER_SOURCE" >&2
-  exit 1
-fi
 GHOSTTY_HELPER="$PERSONAL_APP/Contents/Resources/bin/ghostty"
 install -m 755 "$GHOSTTY_HELPER_SOURCE" "$GHOSTTY_HELPER"
 lipo "$GHOSTTY_HELPER" -verify_arch arm64

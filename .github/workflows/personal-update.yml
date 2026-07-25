@@ -357,7 +357,7 @@ jobs:
 
       - name: Publish candidate ref and dispatch gated build
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN || github.token }}
           PYTHONPATH: ${{ github.workspace }}/control
           TARGET_TAG: ${{ needs.monitor.outputs.target_tag }}
           CANDIDATE_BRANCH: ${{ needs.prepare.outputs.candidate_branch }}
@@ -375,16 +375,12 @@ jobs:
             --bundle "$bundle" \
             --destination candidate \
             --expected-commit "$candidate_sha"
-          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" >/dev/null 2>&1; then
-            gh api --method PATCH \
-              "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" \
-              -f sha="$candidate_sha" \
-              -F force=true
-          else
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
-              -f ref="refs/heads/${CANDIDATE_BRANCH}" \
-              -f sha="$candidate_sha"
-          fi
+          python3 control/personal/candidate_manager.py publish \
+            --repo candidate \
+            --remote-url "https://github.com/${GITHUB_REPOSITORY}.git" \
+            --candidate-branch "$CANDIDATE_BRANCH" \
+            --expected-commit "$candidate_sha" \
+            --github-auth
           gh workflow run personal-build.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref personal-control \

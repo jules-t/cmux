@@ -5,7 +5,6 @@ import json
 import os
 import pathlib
 import re
-import shutil
 from typing import Any
 
 from personal.common import (
@@ -332,6 +331,64 @@ def clone_bundle_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def publish_candidate(
+    repo: pathlib.Path,
+    *,
+    remote_url: str,
+    candidate_branch: str,
+    expected_commit: str,
+    github_auth: bool = False,
+) -> None:
+    if not BRANCH_RE.fullmatch(candidate_branch):
+        raise ControlError(f"unsafe candidate branch name: {candidate_branch!r}")
+    if git(repo, "check-ref-format", "--branch", candidate_branch, check=False).returncode != 0:
+        raise ControlError(f"invalid candidate branch name: {candidate_branch!r}")
+    head = resolve_commit(repo, "HEAD")
+    if head != expected_commit:
+        raise ControlError(
+            f"candidate HEAD {head} does not match the expected commit {expected_commit}"
+        )
+    if not remote_url or remote_url.startswith("-"):
+        raise ControlError(f"unsafe candidate remote: {remote_url!r}")
+
+    authentication = (
+        ["-c", "credential.helper=!gh auth git-credential"] if github_auth else []
+    )
+    git(
+        repo,
+        *authentication,
+        "push",
+        "--force",
+        remote_url,
+        f"{expected_commit}:refs/heads/{candidate_branch}",
+    )
+    published = git(
+        repo,
+        *authentication,
+        "ls-remote",
+        "--exit-code",
+        remote_url,
+        f"refs/heads/{candidate_branch}",
+    ).stdout.splitlines()
+    remote_commits = [line.split("\t", 1)[0] for line in published if "\t" in line]
+    if remote_commits != [expected_commit]:
+        raise ControlError(
+            f"published candidate ref does not resolve to {expected_commit}: {remote_commits!r}"
+        )
+
+
+def publish_command(args: argparse.Namespace) -> int:
+    publish_candidate(
+        pathlib.Path(args.repo).resolve(),
+        remote_url=args.remote_url,
+        candidate_branch=args.candidate_branch,
+        expected_commit=args.expected_commit,
+        github_auth=args.github_auth,
+    )
+    print(f"published {args.expected_commit} to {args.candidate_branch}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Prepare and verify personal cmux rebases.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -362,6 +419,14 @@ def main() -> int:
     clone.add_argument("--destination", required=True)
     clone.add_argument("--expected-commit")
     clone.set_defaults(handler=clone_bundle_command)
+
+    publish = subparsers.add_parser("publish")
+    publish.add_argument("--repo", required=True)
+    publish.add_argument("--remote-url", required=True)
+    publish.add_argument("--candidate-branch", required=True)
+    publish.add_argument("--expected-commit", required=True)
+    publish.add_argument("--github-auth", action="store_true")
+    publish.set_defaults(handler=publish_command)
 
     args = parser.parse_args()
     return args.handler(args)

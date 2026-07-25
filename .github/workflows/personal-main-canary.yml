@@ -1,4 +1,4 @@
-name: Mirror upstream main and run personal canary
+name: Observe upstream main and run personal canary
 
 on:
   schedule:
@@ -22,38 +22,26 @@ concurrency:
 jobs:
   mirror:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     permissions:
-      contents: write
+      contents: read
     outputs:
       upstream_sha: ${{ steps.sync.outputs.upstream_sha }}
     steps:
-      - name: Check out fork main
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: main
-          fetch-depth: 0
-
-      - name: Mirror official main exactly
+      - name: Observe official main exactly
         id: sync
         run: |
           set -euo pipefail
-          git remote add upstream https://github.com/manaflow-ai/cmux.git
-          git fetch --no-tags upstream main
-          upstream_sha="$(git rev-parse upstream/main)"
-          current_sha="$(git rev-parse origin/main)"
-          if [[ "$current_sha" != "$upstream_sha" ]]; then
-            git push \
-              --force-with-lease="refs/heads/main:${current_sha}" \
-              origin \
-              "${upstream_sha}:refs/heads/main"
+          upstream_sha="$(git ls-remote https://github.com/manaflow-ai/cmux.git refs/heads/main | awk '{print $1}')"
+          if [[ ! "$upstream_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "could not resolve the exact upstream main commit" >&2
+            exit 1
           fi
           echo "upstream_sha=$upstream_sha" >> "$GITHUB_OUTPUT"
           {
-            echo "### upstream main mirror"
+            echo "### upstream main observation"
             echo ""
             echo "- upstream: \`$upstream_sha\`"
-            echo "- previous fork main: \`$current_sha\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
   canary:
@@ -156,7 +144,7 @@ jobs:
 
       - name: Publish replaceable canary ref and dispatch build
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN || github.token }}
           PYTHONPATH: ${{ github.workspace }}/control
           CANDIDATE_SHA: ${{ needs.canary.outputs.candidate_commit }}
         run: |
@@ -165,16 +153,12 @@ jobs:
             --bundle candidate-artifact/canary.bundle \
             --destination candidate \
             --expected-commit "$CANDIDATE_SHA"
-          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/canary/main" >/dev/null 2>&1; then
-            gh api --method PATCH \
-              "repos/${GITHUB_REPOSITORY}/git/refs/heads/canary/main" \
-              -f sha="$CANDIDATE_SHA" \
-              -F force=true
-          else
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
-              -f ref="refs/heads/canary/main" \
-              -f sha="$CANDIDATE_SHA"
-          fi
+          python3 control/personal/candidate_manager.py publish \
+            --repo candidate \
+            --remote-url "https://github.com/${GITHUB_REPOSITORY}.git" \
+            --candidate-branch canary/main \
+            --expected-commit "$CANDIDATE_SHA" \
+            --github-auth
           gh workflow run personal-build.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref personal-control \
@@ -234,4 +218,4 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --assignee "$GITHUB_REPOSITORY_OWNER" \
             --title "cmux Personal main monitoring requires attention" \
-            --body "The upstream-main mirror or weekly canary failed. This did not change personal/stable or the installed app. Review: ${RUN_URL}"
+            --body "The upstream-main observation or weekly canary failed. This did not change personal/stable or the installed app. Review: ${RUN_URL}"
