@@ -17,6 +17,7 @@ PERSONAL_TAG="$7"
 GHOSTTY_HELPER_SOURCE="$(cd "$(dirname "$8")" && pwd)/$(basename "$8")"
 REMOTE_DAEMON_MANIFEST="$(cd "$(dirname "$9")" && pwd)/$(basename "$9")"
 CONFIG="$CONTROL_ROOT/personal/config.json"
+export PYTHONPATH="$CONTROL_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
 APP_NAME="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["app_name"])' "$CONFIG")"
 BUNDLE_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["bundle_identifier"])' "$CONFIG")"
