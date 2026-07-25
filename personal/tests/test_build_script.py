@@ -54,3 +54,12 @@ class BuildScriptTests(unittest.TestCase):
         self.assertNotIn('! -x "$GHOSTTY_HELPER_SOURCE"', script)
         self.assertIn('lipo "$GHOSTTY_HELPER_SOURCE" -verify_arch arm64', script)
         self.assertIn('install -m 755 "$GHOSTTY_HELPER_SOURCE" "$GHOSTTY_HELPER"', script)
+
+    def test_diff_sidecar_verification_matches_the_arm64_only_build(self) -> None:
+        script = self._script()
+
+        self.assertIn(
+            './scripts/verify-diff-sidecar-artifact.sh "$DIFF_SIDECAR" '
+            '--archs "arm64"',
+            script,
+        )

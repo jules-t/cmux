@@ -184,7 +184,7 @@ DIFF_SIDECAR="$PERSONAL_APP/Contents/Resources/bin/cmux-diff-sidecar"
 lipo "$APP_BINARY" -verify_arch arm64
 lipo "$CLI_BINARY" -verify_arch arm64
 lipo "$GHOSTTY_HELPER" -verify_arch arm64
-./scripts/verify-diff-sidecar-artifact.sh "$DIFF_SIDECAR"
+./scripts/verify-diff-sidecar-artifact.sh "$DIFF_SIDECAR" --archs "arm64"
 SDK_VERSION="$(otool -l "$APP_BINARY" | awk '/LC_BUILD_VERSION/ { in_version=1; next } in_version && /sdk / { print $2; exit }')"
 [[ "$SDK_VERSION" == 26.* ]]
 CMUX_CLI_BIN="$CLI_BINARY" python3 tests/test_cli_version_memory_guard.py
