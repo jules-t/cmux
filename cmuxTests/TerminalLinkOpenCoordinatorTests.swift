@@ -53,6 +53,34 @@ struct TerminalLinkOpenCoordinatorTests {
         #expect(externallyOpened == [url])
     }
 
+    @Test("Unresolved local code paths do not fall back to a browser")
+    @MainActor
+    func unresolvedLocalCodePathDoesNotOpenExternally() {
+        let defaults = makeDefaults()
+        var externallyOpened: [URL] = []
+        let coordinator = TerminalLinkOpenCoordinator(
+            defaults: defaults,
+            containerResolver: { _, _ in nil },
+            externalOpen: { openedURL in
+                externallyOpened.append(openedURL)
+                return true
+            },
+            deferOperation: { operation in operation() }
+        )
+
+        let handled = coordinator.open(
+            TerminalLinkOpenRequest(
+                rawValue: "data/load.py",
+                sourceWorkspaceId: nil,
+                sourcePanelId: UUID(),
+                workingDirectory: nil
+            )
+        )
+
+        #expect(handled)
+        #expect(externallyOpened.isEmpty)
+    }
+
     @Test("Dock terminal links split once, then reuse the right browser pane")
     @MainActor
     func dockEmbeddedLinksReuseThenSplit() throws {
