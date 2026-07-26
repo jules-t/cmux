@@ -15,7 +15,7 @@ class SetupLocalTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             environment = os.environ.copy()
             environment["HOME"] = temporary
-            environment["PYTHONPATH"] = str(control_root)
+            environment.pop("PYTHONPATH", None)
             subprocess.run(
                 [
                     sys.executable,
@@ -27,6 +27,7 @@ class SetupLocalTests(unittest.TestCase):
                     "--no-load",
                 ],
                 check=True,
+                cwd=temporary,
                 env=environment,
                 text=True,
                 stdout=subprocess.PIPE,
