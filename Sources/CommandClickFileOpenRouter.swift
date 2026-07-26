@@ -20,15 +20,17 @@ enum CommandClickFileOpenRouter {
         defaults: UserDefaults = .standard
     ) -> Bool {
         let store = FileRouteSettingsStore(defaults: defaults)
-        if store.shouldRouteMarkdown(path: filePath),
-           workspace.openOrFocusMarkdownSplit(from: sourcePanelId, filePath: filePath) != nil {
-            return true
+        if store.shouldRouteMarkdown(path: filePath) {
+            return workspace.openOrFocusFileSplit(
+                from: sourcePanelId,
+                filePath: filePath,
+                presentation: .markdown
+            ) != nil
         }
 
         guard store.shouldRouteSupportedFile(path: filePath) else {
             return false
         }
-
         if TerminalHTMLFileBrowserAction(defaults: defaults).open(
             fileURL: URL(fileURLWithPath: filePath),
             sourcePanelId: sourcePanelId,
@@ -37,7 +39,11 @@ enum CommandClickFileOpenRouter {
             return true
         }
 
-        return workspace.openOrFocusFilePreviewSplit(from: sourcePanelId, filePath: filePath) != nil
+        return workspace.openOrFocusFileSplit(
+            from: sourcePanelId,
+            filePath: filePath,
+            presentation: .filePreview
+        ) != nil
     }
 
     /// Resolve the working directory for a terminal surface, preferring the

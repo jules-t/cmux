@@ -142,6 +142,7 @@ extension CMUXCLI {
         var pane: String?
         var focus: String?
         var noFocus = false
+        var tab = false
         var targets: [String] = []
     }
 
@@ -853,6 +854,9 @@ extension CMUXCLI {
             if let workspaceHandle { params["workspace_id"] = workspaceHandle }
             if let surfaceHandle { params["surface_id"] = surfaceHandle }
             if let paneHandle { params["pane_id"] = paneHandle }
+            if paneHandle == nil, !parsedArgs.tab {
+                params["placement"] = "split"
+            }
             let payload = try client.sendV2(method: "file.open", params: params)
             payloads.append(["kind": "file", "payload": payload])
             fileCount += files.count
@@ -1274,9 +1278,13 @@ extension CMUXCLI {
                     parsed.noFocus = true
                     index += 1
                     continue
+                case "--tab":
+                    parsed.tab = true
+                    index += 1
+                    continue
                 default:
                     if arg.hasPrefix("-") {
-                        throw CLIError(message: "open: unknown flag '\(arg)'. Usage: cmux open <path-or-url>... [--workspace <id|ref|index>] [--surface <id|ref|index>] [--pane <id|ref|index>] [--window <id|ref|index>] [--focus true|false] [--no-focus]")
+                        throw CLIError(message: "open: unknown flag '\(arg)'. Usage: cmux open <path-or-url>... [--workspace <id|ref|index>] [--surface <id|ref|index>] [--pane <id|ref|index>] [--window <id|ref|index>] [--focus true|false] [--no-focus] [--tab]")
                     }
                 }
             }
@@ -7872,20 +7880,22 @@ extension CMUXCLI {
 
         Open files, directories, or URLs in cmux.
         HTML files open in browser splits without focusing by default.
-        Markdown files open in markdown preview tabs; other files open in file preview tabs.
-        Multiple files open as tabs in the same target pane.
+        Files open in a right-side viewer pane by default.
+        Multiple files open as tabs in the same right-side pane.
 
         Options:
           --workspace <id|ref|index>   Target workspace (default: $CMUX_WORKSPACE_ID)
-          --surface <id|ref|index>     Target surface whose pane should receive file tabs (default: $CMUX_SURFACE_ID)
-          --pane <id|ref|index>        Target pane for file tabs
+          --surface <id|ref|index>     Source surface to split from (default: $CMUX_SURFACE_ID)
+          --pane <id|ref|index>        Open file tabs in this pane instead of splitting
           --window <id|ref|index>      Target window
           --focus <true|false>         Focus opened file previews (default: true)
           --no-focus                   Do not focus opened file previews
+          --tab                        Open in the source pane as a tab instead of splitting
 
         Examples:
           cmux open report.pdf
           cmux open image-a.png image-b.jpg
+          cmux open notes.py --tab
           cmux open ~/Downloads/movie.mov --pane pane:1
           cmux open https://example.com
         """
