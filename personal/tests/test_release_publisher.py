@@ -32,10 +32,14 @@ class GitHubStub:
         release: dict[str, object] | None = None,
         source_sha: str = SOURCE_SHA,
         annotated: bool = False,
+        visibility_delay: int = 0,
+        tag_exists: bool | None = None,
     ) -> None:
         self.release = release
         self.source_sha = source_sha
         self.annotated = annotated
+        self.visibility_delay = visibility_delay
+        self.tag_exists = tag_exists
         self.assets: list[dict[str, object]] = []
         self.calls: list[tuple[str, ...]] = []
 
@@ -44,23 +48,47 @@ class GitHubStub:
         if arguments[:3] == ("api", "--paginate", "--slurp"):
             path = arguments[3]
             if path == f"repos/{REPOSITORY}/releases?per_page=100":
-                releases = [] if self.release is None else [self.release]
+                if self.release is not None and self.visibility_delay > 0:
+                    self.visibility_delay -= 1
+                    releases = []
+                else:
+                    releases = [] if self.release is None else [self.release]
                 return completed([releases])
             if path == f"repos/{REPOSITORY}/releases/1/assets?per_page=100":
                 return completed([self.assets])
-        if arguments[:2] == ("api", f"repos/{REPOSITORY}/git/ref/tags/{PERSONAL_TAG}"):
+        if arguments[:2] == (
+            "api",
+            f"repos/{REPOSITORY}/git/matching-refs/tags/{PERSONAL_TAG}",
+        ):
+            tag_exists = self.tag_exists
+            if tag_exists is None:
+                tag_exists = self.release is not None and not bool(
+                    self.release.get("draft")
+                )
+            if not tag_exists:
+                return completed([])
             object_type = "tag" if self.annotated else "commit"
             object_sha = "c" * 40 if self.annotated else self.source_sha
-            return completed({"object": {"type": object_type, "sha": object_sha}})
+            return completed(
+                [
+                    {
+                        "ref": f"refs/tags/{PERSONAL_TAG}",
+                        "object": {"type": object_type, "sha": object_sha},
+                    }
+                ]
+            )
         if arguments[:2] == ("api", f"repos/{REPOSITORY}/git/tags/{'c' * 40}"):
             return completed({"object": {"type": "commit", "sha": self.source_sha}})
         if arguments[:3] == ("release", "create", PERSONAL_TAG):
+            if self.release is not None:
+                raise ControlError("release already exists")
             target = arguments[arguments.index("--target") + 1]
             self.source_sha = target
             self.release = {
                 "id": 1,
                 "tag_name": PERSONAL_TAG,
                 "draft": True,
+                "target_commitish": target,
             }
             self.assets = []
             return completed()
@@ -85,7 +113,12 @@ class GitHubStub:
 
 
 def draft_release() -> dict[str, object]:
-    return {"id": 1, "tag_name": PERSONAL_TAG, "draft": True}
+    return {
+        "id": 1,
+        "tag_name": PERSONAL_TAG,
+        "draft": True,
+        "target_commitish": SOURCE_SHA,
+    }
 
 
 class ReleasePublisherTests(unittest.TestCase):
@@ -114,8 +147,8 @@ class ReleasePublisherTests(unittest.TestCase):
         self.assertEqual(create[create.index("--target") + 1], SOURCE_SHA)
         self.assertFalse(any(call[:2] == ("release", "upload") for call in github.calls))
 
-    def test_reserve_reuses_an_exact_annotated_draft_and_exercises_edit(self) -> None:
-        github = GitHubStub(release=draft_release(), annotated=True)
+    def test_reserve_reuses_an_exact_draft_and_exercises_edit(self) -> None:
+        github = GitHubStub(release=draft_release())
 
         with mock.patch.object(release_publisher, "gh", side_effect=github):
             release_publisher.reserve_release(
@@ -129,15 +162,32 @@ class ReleasePublisherTests(unittest.TestCase):
         self.assertIn("--title", edit)
         self.assertIn("--notes", edit)
         self.assertIn("--draft", edit)
-        self.assertTrue(
-            any(
-                call[:2] == ("api", f"repos/{REPOSITORY}/git/tags/{'c' * 40}")
-                for call in github.calls
-            )
+        self.assertFalse(
+            any("/git/ref/tags/" in " ".join(call) for call in github.calls)
         )
 
-    def test_reserve_rejects_a_draft_whose_tag_points_elsewhere(self) -> None:
-        github = GitHubStub(release=draft_release(), source_sha=OTHER_SHA)
+    def test_reserve_rejects_a_draft_whose_target_points_elsewhere(self) -> None:
+        release = draft_release()
+        release["target_commitish"] = OTHER_SHA
+        github = GitHubStub(release=release)
+
+        with mock.patch.object(release_publisher, "gh", side_effect=github):
+            with self.assertRaisesRegex(ControlError, "targets"):
+                release_publisher.reserve_release(
+                    repository=REPOSITORY,
+                    personal_tag=PERSONAL_TAG,
+                    source_sha=SOURCE_SHA,
+                    base_tag=BASE_TAG,
+                )
+
+        self.assertFalse(any(call[:2] == ("release", "edit") for call in github.calls))
+
+    def test_reserve_rejects_a_draft_with_a_conflicting_existing_tag(self) -> None:
+        github = GitHubStub(
+            release=draft_release(),
+            source_sha=OTHER_SHA,
+            tag_exists=True,
+        )
 
         with mock.patch.object(release_publisher, "gh", side_effect=github):
             with self.assertRaisesRegex(ControlError, "points to"):
@@ -149,6 +199,49 @@ class ReleasePublisherTests(unittest.TestCase):
                 )
 
         self.assertFalse(any(call[:2] == ("release", "edit") for call in github.calls))
+
+    def test_reserve_retries_new_draft_visibility(self) -> None:
+        github = GitHubStub(visibility_delay=2)
+
+        with (
+            mock.patch.object(release_publisher, "gh", side_effect=github),
+            mock.patch.object(release_publisher.time, "sleep") as sleep,
+        ):
+            release = release_publisher.reserve_release(
+                repository=REPOSITORY,
+                personal_tag=PERSONAL_TAG,
+                source_sha=SOURCE_SHA,
+                base_tag=BASE_TAG,
+            )
+
+        self.assertTrue(release["draft"])
+        self.assertEqual(sleep.call_count, 1)
+
+    def test_reserve_recovers_when_an_existing_draft_is_initially_hidden(self) -> None:
+        github = GitHubStub(
+            release=draft_release(),
+            visibility_delay=2,
+        )
+
+        with (
+            mock.patch.object(release_publisher, "gh", side_effect=github),
+            mock.patch.object(release_publisher.time, "sleep") as sleep,
+        ):
+            release = release_publisher.reserve_release(
+                repository=REPOSITORY,
+                personal_tag=PERSONAL_TAG,
+                source_sha=SOURCE_SHA,
+                base_tag=BASE_TAG,
+            )
+
+        self.assertTrue(release["draft"])
+        self.assertEqual(sleep.call_count, 0)
+        self.assertTrue(
+            any(call[:2] == ("release", "create") for call in github.calls)
+        )
+        self.assertTrue(
+            any(call[:2] == ("release", "edit") for call in github.calls)
+        )
 
     def test_reserve_rejects_an_existing_draft_with_assets(self) -> None:
         github = GitHubStub(release=draft_release())
@@ -213,7 +306,7 @@ class ReleasePublisherTests(unittest.TestCase):
 
     def test_publish_is_idempotent_only_when_published_assets_match(self) -> None:
         release = {"id": 1, "tag_name": PERSONAL_TAG, "draft": False}
-        github = GitHubStub(release=release)
+        github = GitHubStub(release=release, annotated=True)
         with tempfile.TemporaryDirectory() as temporary:
             directory = pathlib.Path(temporary)
             config, expected = self.make_assets(directory)
@@ -237,6 +330,12 @@ class ReleasePublisherTests(unittest.TestCase):
         self.assertFalse(result["draft"])
         self.assertFalse(
             any(call[:2] in {("release", "upload"), ("release", "edit")} for call in github.calls)
+        )
+        self.assertTrue(
+            any(
+                call[:2] == ("api", f"repos/{REPOSITORY}/git/tags/{'c' * 40}")
+                for call in github.calls
+            )
         )
 
     def test_publish_rejects_a_remote_asset_mismatch(self) -> None:

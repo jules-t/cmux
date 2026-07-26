@@ -7,6 +7,7 @@ import os
 import pathlib
 import re
 import subprocess
+import time
 import urllib.parse
 from collections.abc import Iterable, Mapping
 from typing import Any
@@ -24,6 +25,8 @@ from personal.verify_release_assets import verify_assets
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 GH_TIMEOUT_SECONDS = 300
+RELEASE_VISIBILITY_ATTEMPTS = 6
+RELEASE_VISIBILITY_DELAY_SECONDS = 2
 
 
 def gh(*arguments: str) -> subprocess.CompletedProcess[str]:
@@ -107,6 +110,34 @@ def find_release(repository: str, personal_tag: str) -> dict[str, Any] | None:
     return matches[0] if matches else None
 
 
+def wait_for_release(
+    repository: str,
+    personal_tag: str,
+    *,
+    expected_draft: bool,
+) -> dict[str, Any]:
+    last_release: dict[str, Any] | None = None
+    for attempt in range(1, RELEASE_VISIBILITY_ATTEMPTS + 1):
+        last_release = find_release(repository, personal_tag)
+        if (
+            last_release is not None
+            and release_is_draft(last_release) is expected_draft
+        ):
+            return last_release
+        if attempt < RELEASE_VISIBILITY_ATTEMPTS:
+            time.sleep(RELEASE_VISIBILITY_DELAY_SECONDS)
+    state = "draft" if expected_draft else "public"
+    if last_release is None:
+        raise ControlError(
+            f"release {personal_tag} was not visible as {state} after "
+            f"{RELEASE_VISIBILITY_ATTEMPTS} attempts"
+        )
+    raise ControlError(
+        f"release {personal_tag} did not become {state} after "
+        f"{RELEASE_VISIBILITY_ATTEMPTS} attempts"
+    )
+
+
 def release_id(release: Mapping[str, Any]) -> int:
     value = release.get("id")
     if isinstance(value, bool) or not isinstance(value, int):
@@ -140,14 +171,27 @@ def object_reference(value: Any, *, context: str) -> tuple[str, str]:
     return object_type, sha.lower()
 
 
-def resolve_tag_commit(repository: str, personal_tag: str) -> str:
+def find_tag_commit(repository: str, personal_tag: str) -> str | None:
     encoded_tag = urllib.parse.quote(personal_tag, safe="")
-    reference = parse_json_output(
-        gh("api", f"repos/{repository}/git/ref/tags/{encoded_tag}"),
-        context=f"GitHub tag {personal_tag}",
+    references = parse_json_output(
+        gh("api", f"repos/{repository}/git/matching-refs/tags/{encoded_tag}"),
+        context=f"GitHub matching tags for {personal_tag}",
     )
-    if not isinstance(reference, dict):
-        raise ControlError(f"GitHub tag {personal_tag} is not a JSON object")
+    if not isinstance(references, list) or not all(
+        isinstance(reference, dict) for reference in references
+    ):
+        raise ControlError(f"GitHub matching tags for {personal_tag} are malformed")
+    exact_ref = f"refs/tags/{personal_tag}"
+    matches = [
+        reference
+        for reference in references
+        if reference.get("ref") == exact_ref
+    ]
+    if len(matches) > 1:
+        raise ControlError(f"GitHub returned duplicate tag refs for {personal_tag}")
+    if not matches:
+        return None
+    reference = matches[0]
     object_type, sha = object_reference(
         reference.get("object"),
         context=f"GitHub tag {personal_tag}",
@@ -170,16 +214,51 @@ def resolve_tag_commit(repository: str, personal_tag: str) -> str:
     return sha
 
 
+def resolve_tag_commit(repository: str, personal_tag: str) -> str:
+    sha = find_tag_commit(repository, personal_tag)
+    if sha is None:
+        raise ControlError(f"release tag {personal_tag} does not exist")
+    return sha
+
+
 def require_release_source(
     repository: str,
+    release: Mapping[str, Any],
     personal_tag: str,
     source_sha: str,
 ) -> None:
-    actual_sha = resolve_tag_commit(repository, personal_tag)
-    if actual_sha != source_sha:
-        raise ControlError(
-            f"release tag {personal_tag} points to {actual_sha}, expected {source_sha}"
-        )
+    if release_is_draft(release):
+        target = release.get("target_commitish")
+        if not isinstance(target, str) or target.lower() != source_sha:
+            raise ControlError(
+                f"draft release {personal_tag} targets {target!r}, expected {source_sha}"
+            )
+        existing_tag_sha = find_tag_commit(repository, personal_tag)
+        if existing_tag_sha is not None and existing_tag_sha != source_sha:
+            raise ControlError(
+                f"release tag {personal_tag} points to {existing_tag_sha}, "
+                f"expected {source_sha}"
+            )
+        return
+    last_error: ControlError | None = None
+    for attempt in range(1, RELEASE_VISIBILITY_ATTEMPTS + 1):
+        try:
+            actual_sha = resolve_tag_commit(repository, personal_tag)
+        except ControlError as exc:
+            last_error = exc
+            if attempt < RELEASE_VISIBILITY_ATTEMPTS:
+                time.sleep(RELEASE_VISIBILITY_DELAY_SECONDS)
+                continue
+            break
+        if actual_sha != source_sha:
+            raise ControlError(
+                f"release tag {personal_tag} points to {actual_sha}, expected {source_sha}"
+            )
+        return
+    raise ControlError(
+        f"release tag {personal_tag} did not become visible after "
+        f"{RELEASE_VISIBILITY_ATTEMPTS} attempts: {last_error}"
+    )
 
 
 def release_title(base_tag: str, personal_tag: str) -> str:
@@ -227,36 +306,49 @@ def reserve_release(
 
     release = find_release(repository, personal_tag)
     if release is None:
-        gh(
-            "release",
-            "create",
-            personal_tag,
-            "--repo",
-            repository,
-            "--target",
-            source_sha,
-            "--title",
-            title,
-            "--notes",
-            notes,
-            "--draft",
-        )
+        creation_error: ControlError | None = None
+        try:
+            gh(
+                "release",
+                "create",
+                personal_tag,
+                "--repo",
+                repository,
+                "--target",
+                source_sha,
+                "--title",
+                title,
+                "--notes",
+                notes,
+                "--draft",
+            )
+        except ControlError as exc:
+            creation_error = exc
         release = find_release(repository, personal_tag)
         if release is None:
-            raise ControlError(f"draft release {personal_tag} was not visible after creation")
-        if not release_is_draft(release):
+            try:
+                release = wait_for_release(
+                    repository,
+                    personal_tag,
+                    expected_draft=True,
+                )
+            except ControlError as visibility_error:
+                if creation_error is not None:
+                    raise ControlError(
+                        f"could not create draft release {personal_tag}: "
+                        f"{creation_error}; no concurrent draft became visible: "
+                        f"{visibility_error}"
+                    ) from creation_error
+                raise
+        elif not release_is_draft(release):
             raise ControlError(f"new release {personal_tag} is unexpectedly public")
-        if list_release_assets(repository, release):
-            raise ControlError(f"new draft release {personal_tag} is not empty")
-        require_release_source(repository, personal_tag, source_sha)
-        return release
 
     if not release_is_draft(release):
         raise ControlError(f"release {personal_tag} is already published")
-    require_release_source(repository, personal_tag, source_sha)
+    require_release_source(repository, release, personal_tag, source_sha)
     if list_release_assets(repository, release):
         raise ControlError(
-            f"existing draft release {personal_tag} contains assets; "
+            f"draft release {personal_tag} contains assets; "
             "resume its publication instead of rebuilding"
         )
     gh(
@@ -375,7 +467,7 @@ def publish_release(
         raise ControlError(
             f"reserved draft release {personal_tag} does not exist; run reserve first"
         )
-    require_release_source(repository, personal_tag, source_sha)
+    require_release_source(repository, release, personal_tag, source_sha)
 
     if not release_is_draft(release):
         verify_remote_assets(repository, release, expected)
@@ -393,7 +485,7 @@ def publish_release(
     release = find_release(repository, personal_tag)
     if release is None:
         raise ControlError(f"draft release {personal_tag} disappeared after asset upload")
-    require_release_source(repository, personal_tag, source_sha)
+    require_release_source(repository, release, personal_tag, source_sha)
     verify_remote_assets(repository, release, expected)
 
     if release_is_draft(release):
@@ -406,12 +498,12 @@ def publish_release(
             "--draft=false",
         )
 
-    release = find_release(repository, personal_tag)
-    if release is None:
-        raise ControlError(f"release {personal_tag} disappeared after publication")
-    if release_is_draft(release):
-        raise ControlError(f"release {personal_tag} remained a draft after publication")
-    require_release_source(repository, personal_tag, source_sha)
+    release = wait_for_release(
+        repository,
+        personal_tag,
+        expected_draft=False,
+    )
+    require_release_source(repository, release, personal_tag, source_sha)
     verify_remote_assets(repository, release, expected)
     return release
 
