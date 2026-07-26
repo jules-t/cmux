@@ -1,15 +1,9 @@
 {
   "schema_version": 1,
   "current_stable_tag": "v0.64.20",
-  "last_promoted_personal_tag": null,
+  "last_promoted_personal_tag": "personal-v0.64.20-r1",
   "personal_stable_sha": "f24a68e46de7dbee1b20fedab7a02c656dce4a17",
-  "publication_claim": {
-    "base_tag": "v0.64.20",
-    "personal_tag": "personal-v0.64.20-r1",
-    "source_sha": "f24a68e46de7dbee1b20fedab7a02c656dce4a17",
-    "workflow_run_id": "30217076023",
-    "claimed_at": "2026-07-26T20:32:31Z"
-  },
+  "publication_claim": null,
   "pending_observation": {
     "tag": null,
     "count": 0,
@@ -17,10 +11,10 @@
     "last_seen_at": null
   },
   "attempt": {
-    "tag": null,
-    "status": null,
-    "workflow_run_id": null,
-    "updated_at": null
+    "tag": "v0.64.20",
+    "status": "promoted",
+    "workflow_run_id": "30217076023",
+    "updated_at": "2026-07-26T20:32:39Z"
   },
   "last_check": {
     "status": "current",
@@ -28,5 +22,7 @@
     "github_tag": "v0.64.20",
     "checked_at": "2026-07-24T14:21:30Z",
     "detail": "v0.64.20 is still the latest stable release"
-  }
+  },
+  "last_published_base_tag": "v0.64.20",
+  "last_promoted_source_sha": "f24a68e46de7dbee1b20fedab7a02c656dce4a17"
 }
