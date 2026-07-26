@@ -1,7 +1,73 @@
 import Bonsplit
 import Foundation
 
+enum FileSurfaceSplitPresentation {
+    case automatic
+    case markdown
+    case filePreview
+}
+
 extension Workspace {
+    /// Open a file beside `sourcePanelId`, reusing the existing right-side
+    /// pane when possible. This is the shared placement path for terminal
+    /// command-clicks and `cmux open`.
+    @discardableResult
+    func openOrFocusFileSplit(
+        from sourcePanelId: UUID,
+        filePath: String,
+        presentation: FileSurfaceSplitPresentation = .automatic,
+        focus: Bool = true
+    ) -> (any Panel)? {
+        let useMarkdownViewer: Bool
+        switch presentation {
+        case .automatic:
+            useMarkdownViewer = MarkdownPanelFileLinkResolver.isMarkdownPathLike(filePath)
+        case .markdown:
+            useMarkdownViewer = true
+        case .filePreview:
+            useMarkdownViewer = false
+        }
+
+        if useMarkdownViewer {
+            return openOrFocusMarkdownSplit(
+                from: sourcePanelId,
+                filePath: filePath,
+                focus: focus
+            )
+        }
+        return openOrFocusFilePreviewSplit(
+            from: sourcePanelId,
+            filePath: filePath,
+            focus: focus
+        )
+    }
+
+    /// Open the first file in a right-side split and any remaining files as
+    /// tabs in that same viewer pane.
+    @discardableResult
+    func openFileSurfacesBeside(
+        sourcePanelId: UUID,
+        filePaths: [String],
+        focus: Bool
+    ) -> [any Panel] {
+        guard let firstPath = filePaths.first,
+              let firstPanel = openOrFocusFileSplit(
+                  from: sourcePanelId,
+                  filePath: firstPath,
+                  focus: focus
+              ),
+              let targetPane = paneId(forPanelId: firstPanel.id) else {
+            return []
+        }
+
+        let remainingPanels = openFileSurfaces(
+            inPane: targetPane,
+            filePaths: Array(filePaths.dropFirst()),
+            focus: focus
+        )
+        return [firstPanel] + remainingPanels
+    }
+
     @discardableResult
     func openFileSurfaces(
         inPane paneId: PaneID,

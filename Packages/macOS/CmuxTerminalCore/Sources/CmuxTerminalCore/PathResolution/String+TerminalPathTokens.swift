@@ -136,6 +136,23 @@ extension String {
             if punctuationTrimmed != trimmed {
                 appendUnique(punctuationTrimmed)
             }
+
+            for value in [trimmed, punctuationTrimmed] {
+                if let locationTrimmed = value.trimmingTerminalFileLocationSuffix() {
+                    appendUnique(locationTrimmed)
+                    let unescapedLocation = locationTrimmed.unescapingShellBackslashes()
+                    if unescapedLocation != locationTrimmed {
+                        appendUnique(unescapedLocation)
+                    }
+                    if let unquotedLocation = locationTrimmed.unquotedShellToken() {
+                        appendUnique(unquotedLocation)
+                        let unescapedUnquotedLocation = unquotedLocation.unescapingShellBackslashes()
+                        if unescapedUnquotedLocation != unquotedLocation {
+                            appendUnique(unescapedUnquotedLocation)
+                        }
+                    }
+                }
+            }
         }
 
         append(self)
@@ -154,6 +171,35 @@ extension String {
         }
 
         return candidates
+    }
+
+    /// Removes common editor/compiler location suffixes while preserving the
+    /// literal spelling as the resolver's first candidate.
+    ///
+    /// Supported forms include `file.py:42`, `file.py:42:7`, `file.py#L42`,
+    /// and `file.py#L42C7`.
+    private func trimmingTerminalFileLocationSuffix() -> String? {
+        if let marker = range(of: "#L", options: [.backwards, .caseInsensitive]) {
+            let suffix = self[marker.upperBound...]
+            let pieces = suffix.split(separator: "C", maxSplits: 1, omittingEmptySubsequences: false)
+            if !pieces.isEmpty,
+               pieces.count <= 2,
+               pieces.allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isNumber) }) {
+                let result = String(self[..<marker.lowerBound])
+                return result.isEmpty ? nil : result
+            }
+        }
+
+        var result = self
+        var removedNumericComponent = false
+        for _ in 0..<2 {
+            guard let colon = result.lastIndex(of: ":") else { break }
+            let suffix = result[result.index(after: colon)...]
+            guard !suffix.isEmpty, suffix.allSatisfy(\.isNumber) else { break }
+            result = String(result[..<colon])
+            removedNumericComponent = true
+        }
+        return removedNumericComponent && !result.isEmpty ? result : nil
     }
 
     /// Path-token candidates around a column of a visible terminal line: the
