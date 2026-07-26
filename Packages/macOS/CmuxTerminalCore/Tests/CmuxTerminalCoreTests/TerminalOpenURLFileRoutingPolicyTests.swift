@@ -54,4 +54,20 @@ import CmuxTerminalCore
             ) == false
         )
     }
+
+    @Test func unresolvedCodePathsPreventBrowserFallback() {
+        #expect(policy.shouldPreventBrowserFallback(rawOpenURLValue: "data/load.py"))
+        #expect(policy.shouldPreventBrowserFallback(rawOpenURLValue: "src/main.go:42:7"))
+        #expect(policy.shouldPreventBrowserFallback(rawOpenURLValue: "../Sources/App.swift#L12"))
+        #expect(policy.shouldPreventBrowserFallback(rawOpenURLValue: "~/project/config.json"))
+    }
+
+    @Test func webLinksRemainEligibleForBrowserFallback() {
+        #expect(!policy.shouldPreventBrowserFallback(rawOpenURLValue: "https://example.com/data/load.py"))
+        #expect(!policy.shouldPreventBrowserFallback(rawOpenURLValue: "example.com/docs"))
+        #expect(!policy.shouldPreventBrowserFallback(rawOpenURLValue: "github.com/org/project/data/load.py"))
+        #expect(!policy.shouldPreventBrowserFallback(rawOpenURLValue: "//example.com/assets/app.js"))
+        #expect(!policy.shouldPreventBrowserFallback(rawOpenURLValue: "localhost:3000/app"))
+        #expect(!policy.shouldPreventBrowserFallback(rawOpenURLValue: "[::1]:3000/app.py"))
+    }
 }

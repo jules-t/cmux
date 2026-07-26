@@ -2,6 +2,7 @@ import AppKit
 import Bonsplit
 import Carbon.HIToolbox
 import Quartz
+import Testing
 import XCTest
 
 #if canImport(cmux_DEV)
@@ -9,6 +10,107 @@ import XCTest
 #elseif canImport(cmux)
 @testable import cmux
 #endif
+
+@Suite(.serialized)
+@MainActor
+struct FileOpenSplitPlacementTests {
+    @Test
+    func keepsSourceVisibleAndGroupsFilesInRightPane() throws {
+        let sourceURL = try temporaryTextFile(contents: "source")
+        let firstURL = try temporaryTextFile(contents: "first")
+        let secondURL = try temporaryTextFile(contents: "second")
+        defer {
+            try? FileManager.default.removeItem(at: sourceURL)
+            try? FileManager.default.removeItem(at: firstURL)
+            try? FileManager.default.removeItem(at: secondURL)
+            TerminalController.shared.setActiveTabManager(nil)
+        }
+
+        let manager = TabManager()
+        let workspace = manager.addWorkspace(select: true, eagerLoadTerminal: false)
+        defer { workspace.teardownAllPanels() }
+        let sourcePane = try #require(workspace.bonsplitController.allPaneIds.first)
+        let sourcePanel = try #require(workspace.newFilePreviewSurface(
+            inPane: sourcePane,
+            filePath: sourceURL.path,
+            focus: true
+        ))
+        TerminalController.shared.setActiveTabManager(manager)
+
+        let result = TerminalController.shared.v2FileOpen(params: [
+            "paths": [firstURL.path, secondURL.path],
+            "workspace_id": workspace.id.uuidString,
+            "surface_id": sourcePanel.id.uuidString,
+            "placement": "split",
+            "focus": false
+        ])
+
+        guard case .ok(let rawPayload) = result,
+              let payload = rawPayload as? [String: Any],
+              let surfaces = payload["surfaces"] as? [[String: Any]],
+              surfaces.count == 2,
+              let firstIDString = surfaces[0]["surface_id"] as? String,
+              let secondIDString = surfaces[1]["surface_id"] as? String,
+              let firstID = UUID(uuidString: firstIDString),
+              let secondID = UUID(uuidString: secondIDString),
+              let targetPane = workspace.paneId(forPanelId: firstID) else {
+            Issue.record("Expected split file.open to succeed, got \(result)")
+            return
+        }
+
+        #expect(payload["placement"] as? String == "split")
+        #expect(workspace.bonsplitController.allPaneIds.count == 2)
+        #expect(workspace.paneId(forPanelId: sourcePanel.id)?.id == sourcePane.id)
+        #expect(targetPane != sourcePane)
+        #expect(workspace.paneId(forPanelId: secondID)?.id == targetPane.id)
+        #expect(workspace.bonsplitController.tabs(inPane: targetPane).count == 2)
+        #expect(workspace.focusedPanelId == sourcePanel.id)
+    }
+
+    @Test
+    func doesNotReuseMatchingPreviewFromSourcePane() throws {
+        let sourceURL = try temporaryTextFile(contents: "source")
+        let requestedURL = try temporaryTextFile(contents: "requested")
+        defer {
+            try? FileManager.default.removeItem(at: sourceURL)
+            try? FileManager.default.removeItem(at: requestedURL)
+        }
+
+        let workspace = Workspace()
+        defer { workspace.teardownAllPanels() }
+        let sourcePane = try #require(workspace.bonsplitController.allPaneIds.first)
+        let sourcePanel = try #require(workspace.newFilePreviewSurface(
+            inPane: sourcePane,
+            filePath: sourceURL.path,
+            focus: true
+        ))
+        let oldSamePanePreview = try #require(workspace.newFilePreviewSurface(
+            inPane: sourcePane,
+            filePath: requestedURL.path,
+            focus: false
+        ))
+
+        let opened = try #require(workspace.openOrFocusFileSplit(
+            from: sourcePanel.id,
+            filePath: requestedURL.path,
+            focus: false
+        ))
+        let openedPane = try #require(workspace.paneId(forPanelId: opened.id))
+
+        #expect(opened.id != oldSamePanePreview.id)
+        #expect(openedPane != sourcePane)
+        #expect(workspace.bonsplitController.allPaneIds.count == 2)
+        #expect(workspace.focusedPanelId == sourcePanel.id)
+    }
+
+    private func temporaryTextFile(contents: String) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("txt")
+        try contents.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+}
 
 @MainActor
 final class FilePreviewReviewFeedbackTests: XCTestCase {

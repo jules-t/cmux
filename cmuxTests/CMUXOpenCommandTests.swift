@@ -70,7 +70,9 @@ final class CMUXOpenCommandTests: XCTestCase {
             let params = payload["params"] as? [String: Any] ?? [:]
             if method == "file.open",
                let paths = params["paths"] as? [String],
-               paths == [fileURL.path] {
+               paths == [fileURL.path],
+               params["placement"] as? String == "split",
+               params["surface_id"] as? String == "surface:7" {
                 return Self.v2Response(id: id, ok: true, result: ["surface_id": "surface-id", "pane_id": "pane-id"])
             }
             return Self.v2Response(id: id, ok: false, error: ["code": "unexpected", "message": method])
@@ -79,7 +81,8 @@ final class CMUXOpenCommandTests: XCTestCase {
         let result = runCLI(
             cliPath: cliPath,
             socketPath: socketPath,
-            arguments: ["open", "--", fileURL.path]
+            arguments: ["open", "--", fileURL.path],
+            environmentOverrides: ["CMUX_SURFACE_ID": "surface:7"]
         )
 
         wait(for: [serverHandled], timeout: 5)
