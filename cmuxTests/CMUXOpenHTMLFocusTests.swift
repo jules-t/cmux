@@ -94,7 +94,8 @@ final class CMUXOpenHTMLFocusTests {
             let params = payload["params"] as? [String: Any] ?? [:]
             guard method == "file.open",
                   params["workspace_id"] as? String == "workspace:99",
-                  params["surface_id"] == nil else {
+                  params["surface_id"] == nil,
+                  params["placement"] == nil else {
                 return Self.v2Response(id: id, ok: false, error: ["code": "unexpected", "message": method])
             }
             return Self.v2Response(id: id, ok: true, result: ["surface_id": "surface-id", "pane_id": "pane-id"])
@@ -103,7 +104,7 @@ final class CMUXOpenHTMLFocusTests {
         let result = runCLI(
             cliPath: cliPath,
             socketPath: socketPath,
-            arguments: ["open", fileURL.path, "--workspace", "workspace:99"],
+            arguments: ["open", fileURL.path, "--workspace", "workspace:99", "--tab"],
             environmentOverrides: [
                 "CMUX_WORKSPACE_ID": "caller-workspace",
                 "CMUX_SURFACE_ID": "caller-surface"
