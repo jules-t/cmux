@@ -3012,7 +3012,11 @@ class GhosttyApp {
             // Try file-path resolution before URL classification. Ghostty's link detection can
             // match path-like text as URLs; route existing local files through cmux first.
             let trimmedUrlString = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+            let liveDirectorySnapshot = surfaceView.currentDirectoryActionDispatcher
+                .directorySnapshot()?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
             var normalizedOpenURLString = urlString
+            var resolvedLocalFilePath = false
             if !trimmedUrlString.isEmpty {
                 let filePathResolution: (routed: Bool, fallbackPath: String?) = performOnMain {
                     guard let termSurface = surfaceView.terminalSurface,
@@ -3020,10 +3024,12 @@ class GhosttyApp {
                           !workspace.isRemoteTerminalSurface(termSurface.id) else {
                         return (false, nil)
                     }
-                    let cwd = CommandClickFileOpenRouter.resolveWorkingDirectory(
-                        workspace: workspace,
-                        surfaceId: termSurface.id
-                    )
+                    let cwd = liveDirectorySnapshot?.isEmpty == false
+                        ? liveDirectorySnapshot
+                        : CommandClickFileOpenRouter.resolveWorkingDirectory(
+                            workspace: workspace,
+                            surfaceId: termSurface.id
+                        )
                     guard let resolvedPath = TerminalPathResolver().resolveOpenURLFilePath(trimmedUrlString, cwd: cwd) else {
                         return (false, nil)
                     }
@@ -3045,9 +3051,23 @@ class GhosttyApp {
                     return (true, resolvedPath)
                 }
                 if let fallbackPath = filePathResolution.fallbackPath {
+                    resolvedLocalFilePath = true
                     normalizedOpenURLString = fallbackPath
                 }
                 if filePathResolution.routed {
+                    return true
+                }
+            }
+
+            if !resolvedLocalFilePath,
+               TerminalOpenURLFileRoutingPolicy().shouldPreventBrowserFallback(
+                rawOpenURLValue: trimmedUrlString
+               ) {
+                #if DEBUG
+                cmuxDebugLog("link.openURL unresolved local path; suppressing browser fallback raw=\(trimmedUrlString)")
+                #endif
+                return performOnMain {
+                    NSSound.beep()
                     return true
                 }
             }

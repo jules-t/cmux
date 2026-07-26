@@ -8022,8 +8022,8 @@ final class Workspace: Identifiable, ObservableObject {
         return extensionBrowserPanel
     }
 
-    /// Open the markdown viewer for `filePath`, reusing an existing
-    /// `MarkdownPanel` in this workspace that already shows the same file.
+    /// Open the markdown viewer for `filePath`, reusing a matching
+    /// `MarkdownPanel` only when it is already in the intended side pane.
     /// Paths are compared after symlink resolution so `./README.md` and a
     /// symlink pointing at the same file focus the same viewer.
     /// Returns `nil` when no existing viewer matches and split creation
@@ -8031,19 +8031,24 @@ final class Workspace: Identifiable, ObservableObject {
     @discardableResult
     func openOrFocusMarkdownSplit(
         from panelId: UUID,
-        filePath: String
+        filePath: String,
+        focus: Bool = true
     ) -> MarkdownPanel? {
         let canonical = (filePath as NSString).resolvingSymlinksInPath
-        for (existingId, panel) in panels {
-            guard let md = panel as? MarkdownPanel else { continue }
-            if (md.filePath as NSString).resolvingSymlinksInPath == canonical {
-                focusPanel(existingId)
-                return md
-            }
-        }
-
         if let targetPane = preferredRightSideTargetPane(fromPanelId: panelId) {
-            return newMarkdownSurface(inPane: targetPane, filePath: filePath, focus: true)
+            for (existingId, panel) in panels {
+                guard let md = panel as? MarkdownPanel,
+                      paneId(forPanelId: existingId) == targetPane else {
+                    continue
+                }
+                if (md.filePath as NSString).resolvingSymlinksInPath == canonical {
+                    if focus {
+                        focusPanel(existingId)
+                    }
+                    return md
+                }
+            }
+            return newMarkdownSurface(inPane: targetPane, filePath: filePath, focus: focus)
         }
 
         return newMarkdownSplit(
@@ -8051,7 +8056,7 @@ final class Workspace: Identifiable, ObservableObject {
             orientation: .horizontal,
             insertFirst: false,
             filePath: filePath,
-            focus: true
+            focus: focus
         )
     }
 
@@ -8305,19 +8310,24 @@ final class Workspace: Identifiable, ObservableObject {
     @discardableResult
     func openOrFocusFilePreviewSplit(
         from panelId: UUID,
-        filePath: String
+        filePath: String,
+        focus: Bool = true
     ) -> FilePreviewPanel? {
         let canonical = (filePath as NSString).resolvingSymlinksInPath
-        for (existingId, panel) in panels {
-            guard let preview = panel as? FilePreviewPanel else { continue }
-            if (preview.filePath as NSString).resolvingSymlinksInPath == canonical {
-                focusPanel(existingId)
-                return preview
-            }
-        }
-
         if let targetPane = preferredRightSideTargetPane(fromPanelId: panelId) {
-            return newFilePreviewSurface(inPane: targetPane, filePath: filePath, focus: true)
+            for (existingId, panel) in panels {
+                guard let preview = panel as? FilePreviewPanel,
+                      paneId(forPanelId: existingId) == targetPane else {
+                    continue
+                }
+                if (preview.filePath as NSString).resolvingSymlinksInPath == canonical {
+                    if focus {
+                        focusPanel(existingId)
+                    }
+                    return preview
+                }
+            }
+            return newFilePreviewSurface(inPane: targetPane, filePath: filePath, focus: focus)
         }
 
         guard let sourcePaneId = paneId(forPanelId: panelId) else { return nil }
@@ -8325,7 +8335,8 @@ final class Workspace: Identifiable, ObservableObject {
             targetPane: sourcePaneId,
             orientation: .horizontal,
             insertFirst: false,
-            filePath: filePath
+            filePath: filePath,
+            focus: focus
         )
     }
 
@@ -8532,8 +8543,11 @@ final class Workspace: Identifiable, ObservableObject {
         targetPane paneId: PaneID,
         orientation: SplitOrientation,
         insertFirst: Bool,
-        filePath: String
+        filePath: String,
+        focus: Bool = true
     ) -> FilePreviewPanel? {
+        let previousFocusedPanelId = focusedPanelId
+        let previousHostedView = focusedTerminalPanel?.hostedView
         let filePreviewPanel = FilePreviewPanel(workspaceId: id, filePath: filePath)
         panels[filePreviewPanel.id] = filePreviewPanel
         panelTitles[filePreviewPanel.id] = filePreviewPanel.displayTitle
@@ -8556,10 +8570,17 @@ final class Workspace: Identifiable, ObservableObject {
             removeSurfaceMapping(forSurfaceId: newTab.id)
             return nil
         }
-        publishCmuxSplitCreated(newPaneId, sourcePaneId: paneId, orientation: orientation, surfaceId: filePreviewPanel.id, kind: "file_preview", origin: "file_preview_split", focused: true)
+        publishCmuxSplitCreated(newPaneId, sourcePaneId: paneId, orientation: orientation, surfaceId: filePreviewPanel.id, kind: "file_preview", origin: "file_preview_split", focused: focus)
 
-        bonsplitController.selectTab(newTab.id)
-        filePreviewPanel.focus()
+        if focus {
+            focusPanel(filePreviewPanel.id)
+        } else {
+            preserveFocusAfterNonFocusSplit(
+                preferredPanelId: previousFocusedPanelId,
+                splitPanelId: filePreviewPanel.id,
+                previousHostedView: previousHostedView
+            )
+        }
         installFilePreviewPanelSubscription(filePreviewPanel)
         return filePreviewPanel
     }

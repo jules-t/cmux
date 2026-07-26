@@ -80,6 +80,22 @@ extension TerminalController {
             return .err(code: "invalid_params", message: "Missing 'path' or 'paths' parameter", data: nil)
         }
 
+        let placement = (v2String(params, "placement") ?? "tab").lowercased()
+        guard placement == "tab" || placement == "split" else {
+            return .err(
+                code: "invalid_params",
+                message: "Invalid placement: \(placement). Expected tab or split",
+                data: ["placement": placement]
+            )
+        }
+        if placement == "split", v2UUID(params, "pane_id") != nil {
+            return .err(
+                code: "invalid_params",
+                message: "pane_id cannot be combined with split placement",
+                data: nil
+            )
+        }
+
         var filePaths: [String] = []
         for rawPath in rawPaths {
             let resolved = v2ResolveReadableFilePath(rawPath)
@@ -106,39 +122,61 @@ extension TerminalController {
 
             let requestedPaneUUID = v2UUID(params, "pane_id")
             let requestedSurfaceUUID = v2UUID(params, "surface_id")
-            let hasExplicitPaneDestination = requestedPaneUUID != nil || requestedSurfaceUUID != nil
-            let paneId: PaneID?
-            if let paneUUID = requestedPaneUUID {
-                paneId = ws.bonsplitController.allPaneIds.first(where: { $0.id == paneUUID })
-                if paneId == nil {
-                    result = .err(code: "not_found", message: "Pane not found", data: ["pane_id": paneUUID.uuidString])
+            let openedPanels: [any Panel]
+
+            if placement == "split" {
+                guard let sourceSurfaceId = requestedSurfaceUUID ?? ws.focusedPanelId else {
+                    result = .err(code: "not_found", message: "Source surface not found", data: nil)
                     return
                 }
-            } else if let surfaceId = requestedSurfaceUUID {
-                guard ws.panels[surfaceId] != nil else {
+                guard ws.panels[sourceSurfaceId] != nil else {
                     result = .err(
                         code: "not_found",
                         message: "Source surface not found",
-                        data: ["surface_id": surfaceId.uuidString]
+                        data: ["surface_id": sourceSurfaceId.uuidString]
                     )
                     return
                 }
-                paneId = ws.paneId(forPanelId: surfaceId)
+                openedPanels = ws.openFileSurfacesBeside(
+                    sourcePanelId: sourceSurfaceId,
+                    filePaths: filePaths,
+                    focus: shouldFocus
+                )
             } else {
-                paneId = ws.bonsplitController.focusedPaneId ?? ws.bonsplitController.allPaneIds.first
-            }
+                let hasExplicitPaneDestination = requestedPaneUUID != nil || requestedSurfaceUUID != nil
+                let paneId: PaneID?
+                if let paneUUID = requestedPaneUUID {
+                    paneId = ws.bonsplitController.allPaneIds.first(where: { $0.id == paneUUID })
+                    if paneId == nil {
+                        result = .err(code: "not_found", message: "Pane not found", data: ["pane_id": paneUUID.uuidString])
+                        return
+                    }
+                } else if let surfaceId = requestedSurfaceUUID {
+                    guard ws.panels[surfaceId] != nil else {
+                        result = .err(
+                            code: "not_found",
+                            message: "Source surface not found",
+                            data: ["surface_id": surfaceId.uuidString]
+                        )
+                        return
+                    }
+                    paneId = ws.paneId(forPanelId: surfaceId)
+                } else {
+                    paneId = ws.bonsplitController.focusedPaneId ?? ws.bonsplitController.allPaneIds.first
+                }
 
-            guard let paneId else {
-                result = .err(code: "not_found", message: "Pane not found", data: nil)
-                return
-            }
+                guard let paneId else {
+                    result = .err(code: "not_found", message: "Pane not found", data: nil)
+                    return
+                }
 
-            let openedPanels = ws.openFileSurfaces(
-                inPane: paneId,
-                filePaths: filePaths,
-                focus: shouldFocus,
-                reuseExisting: filePaths.count == 1 && !hasExplicitPaneDestination
-            )
+                openedPanels = ws.openFileSurfaces(
+                    inPane: paneId,
+                    filePaths: filePaths,
+                    focus: shouldFocus,
+                    reuseExisting: filePaths.count == 1 && !hasExplicitPaneDestination
+                )
+            }
             guard !openedPanels.isEmpty else {
                 result = .err(code: "internal_error", message: "Failed to open file", data: nil)
                 return
@@ -162,6 +200,7 @@ extension TerminalController {
                 "panel_type": primary["panel_type"] ?? NSNull(),
                 "path": primary["path"] ?? NSNull(),
                 "paths": filePaths,
+                "placement": placement,
                 "surfaces": surfacePayloads
             ]
             if let previewMode = primary["preview_mode"] {
