@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import fcntl
 import hashlib
 import json
@@ -399,7 +400,7 @@ def installation_status(
     return True, normalized_state_tag, bundle_tag, "the installed app is verified"
 
 
-def main() -> int:
+def _main(resources: contextlib.ExitStack) -> int:
     parser = argparse.ArgumentParser(description="Verify and install cmux Personal releases.")
     parser.add_argument("--config", required=True)
     parser.add_argument("--tag")
@@ -409,7 +410,9 @@ def main() -> int:
     config = load_json(args.config)
     data_root = pathlib.Path("~/.local/share/cmux-personal").expanduser()
     data_root.mkdir(parents=True, exist_ok=True)
-    lock_handle = (data_root / "updater.lock").open("a+", encoding="utf-8")
+    lock_handle = resources.enter_context(
+        (data_root / "updater.lock").open("a+", encoding="utf-8")
+    )
     try:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
@@ -464,12 +467,12 @@ def main() -> int:
         archive = root / archive_name
         manifest_path = root / manifest_name
         checksum_path = root / f"{archive_name}.sha256"
-        for name, destination in (
+        for name, asset_destination in (
             (archive_name, archive),
             (manifest_name, manifest_path),
             (f"{archive_name}.sha256", checksum_path),
         ):
-            download(assets[name], destination)
+            download(assets[name], asset_destination)
 
         manifest = load_json(manifest_path)
         if manifest.get("personal_tag") != tag:
@@ -528,6 +531,11 @@ def main() -> int:
     notify("cmux Personal updated", f"Installed {tag}. It will be used the next time you open it.")
     print(f"installed cmux Personal {tag}")
     return 0
+
+
+def main() -> int:
+    with contextlib.ExitStack() as resources:
+        return _main(resources)
 
 
 if __name__ == "__main__":
