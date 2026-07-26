@@ -325,8 +325,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
-      actions: write
-      contents: write
+      actions: read
+      contents: read
     steps:
       - name: Check out trusted control plane
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -340,6 +340,7 @@ jobs:
         with:
           ref: personal-control
           path: state
+          persist-credentials: false
 
       - name: Download clean candidate
         if: ${{ needs.prepare.outputs.status == 'clean' }}
@@ -357,7 +358,7 @@ jobs:
 
       - name: Publish candidate ref and dispatch gated build
         env:
-          GH_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN || github.token }}
+          GH_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN }}
           PYTHONPATH: ${{ github.workspace }}/control
           TARGET_TAG: ${{ needs.monitor.outputs.target_tag }}
           CANDIDATE_BRANCH: ${{ needs.prepare.outputs.candidate_branch }}
@@ -365,6 +366,10 @@ jobs:
           RESOLVED_COMMIT: ${{ needs.resolve.outputs.candidate_commit }}
         run: |
           set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "PERSONAL_FORK_TOKEN is required for candidate publication" >&2
+            exit 1
+          fi
           bundle="candidate-artifact/candidate-clean.bundle"
           candidate_sha="$CLEAN_COMMIT"
           if [[ "${{ needs.prepare.outputs.status }}" == "conflict" ]]; then
@@ -397,7 +402,10 @@ jobs:
           git -C state config user.email "actions@users.noreply.github.com"
           git -C state add personal/state.json
           git -C state commit -m "chore(personal): dispatch update for $TARGET_TAG"
-          git -C state push origin personal-control
+          git -C state \
+            -c credential.helper= \
+            -c 'credential.helper=!gh auth git-credential' \
+            push origin HEAD:personal-control
 
   report-blocked:
     if: ${{ always() && (needs.monitor.result == 'failure' || (needs.monitor.outputs.ready == 'true' && needs.dispatch.result != 'success')) }}

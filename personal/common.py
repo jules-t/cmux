@@ -63,18 +63,27 @@ def run(
     cwd: os.PathLike[str] | str | None = None,
     check: bool = True,
     env: dict[str, str] | None = None,
+    timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
-        list(command),
-        cwd=cwd,
-        check=False,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=env,
-    )
+    command_list = list(command)
+    try:
+        result = subprocess.run(
+            command_list,
+            cwd=cwd,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        rendered = " ".join(command_list)
+        raise ControlError(
+            f"command timed out after {timeout} seconds: {rendered}"
+        ) from exc
     if check and result.returncode != 0:
-        rendered = " ".join(command)
+        rendered = " ".join(command_list)
         detail = result.stderr.strip() or result.stdout.strip()
         raise ControlError(f"command failed ({result.returncode}): {rendered}\n{detail}")
     return result

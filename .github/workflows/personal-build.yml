@@ -25,6 +25,8 @@ on:
         type: boolean
 
 permissions:
+  actions: read
+  attestations: read
   contents: read
 
 concurrency:
@@ -32,7 +34,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Run static and semantic control-plane checks
+        run: personal/ci/check_control_plane.sh "$GITHUB_WORKSPACE"
+
   metadata:
+    needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -125,8 +143,41 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  ghostty_helper:
+  preflight:
     needs: metadata
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out trusted control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+
+      - name: Reserve exact draft and verify publication permission
+        if: ${{ inputs.publish_release }}
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN }}
+          PYTHONPATH: ${{ github.workspace }}/control
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "PERSONAL_FORK_TOKEN is required for publication" >&2
+            exit 1
+          fi
+          python3 control/personal/release_publisher.py reserve \
+            --repo "$GITHUB_REPOSITORY" \
+            --personal-tag "${{ needs.metadata.outputs.personal_tag }}" \
+            --source-sha "${{ needs.metadata.outputs.source_sha }}" \
+            --base-tag "${{ needs.metadata.outputs.base_tag }}" \
+            --run-url "$RUN_URL"
+
+  ghostty_helper:
+    needs: [metadata, preflight]
     runs-on: macos-15
     timeout-minutes: 30
     permissions:
@@ -269,95 +320,21 @@ jobs:
           name: cmux-personal-${{ needs.metadata.outputs.personal_tag }}
           path: dist/*
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
 
   publish:
     if: ${{ inputs.publish_release }}
-    needs: [metadata, attest]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: write
-    steps:
-      - name: Check out trusted control plane
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ github.sha }}
-          path: control
-          persist-credentials: false
-
-      - name: Check out current personal state
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: personal-control
-          path: state
-
-      - name: Download verified build assets
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
-        with:
-          name: cmux-personal-${{ needs.metadata.outputs.personal_tag }}
-          path: dist
-
-      - name: Create verified draft release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PERSONAL_TAG: ${{ needs.metadata.outputs.personal_tag }}
-          SOURCE_SHA: ${{ needs.metadata.outputs.source_sha }}
-          BASE_TAG: ${{ needs.metadata.outputs.base_tag }}
-        run: |
-          set -euo pipefail
-          gh release create "$PERSONAL_TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$SOURCE_SHA" \
-            --title "cmux Personal ${PERSONAL_TAG}" \
-            --notes "Personal arm64 build based on official cmux ${BASE_TAG}. Built and tested on the free GitHub-hosted macos-26 runner; the archive has GitHub build-provenance attestation." \
-            --draft \
-            dist/*
-
-      - name: Promote tested source when requested
-        if: ${{ inputs.promote_source }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SOURCE_SHA: ${{ needs.metadata.outputs.source_sha }}
-        run: |
-          set -euo pipefail
-          gh api \
-            --method PATCH \
-            "repos/${GITHUB_REPOSITORY}/git/refs/heads/personal/stable" \
-            -f sha="$SOURCE_SHA" \
-            -F force=true
-
-      - name: Make verified release visible to local updaters
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PERSONAL_TAG: ${{ needs.metadata.outputs.personal_tag }}
-        run: |
-          gh release edit "$PERSONAL_TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --draft=false
-
-      - name: Record promoted state
-        env:
-          PYTHONPATH: ${{ github.workspace }}/control
-        run: |
-          set -euo pipefail
-          python3 control/personal/state_manager.py promote \
-            --state state/personal/state.json \
-            --base-tag "${{ needs.metadata.outputs.base_tag }}" \
-            --personal-tag "${{ needs.metadata.outputs.personal_tag }}" \
-            --source-sha "${{ needs.metadata.outputs.source_sha }}" \
-            --run-id "$GITHUB_RUN_ID"
-          git -C state config user.name "cmux Personal automation"
-          git -C state config user.email "actions@users.noreply.github.com"
-          git -C state add personal/state.json
-          if ! git -C state diff --cached --quiet; then
-            git -C state commit -m "chore(personal): record ${{ needs.metadata.outputs.personal_tag }}"
-            git -C state push origin personal-control
-          fi
+    needs: [metadata, preflight, attest]
+    uses: ./.github/workflows/personal-publish.yml
+    with:
+      build_run_id: ${{ github.run_id }}
+      promote_source: ${{ inputs.promote_source }}
+    secrets:
+      PERSONAL_FORK_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN }}
 
   report-failure:
-    if: ${{ always() && (needs.metadata.result == 'failure' || needs.ghostty_helper.result == 'failure' || needs.build.result == 'failure' || needs.attest.result == 'failure' || needs.publish.result == 'failure') }}
-    needs: [metadata, ghostty_helper, build, attest, publish]
+    if: ${{ always() && (needs.validate.result == 'failure' || needs.metadata.result == 'failure' || needs.preflight.result == 'failure' || needs.ghostty_helper.result == 'failure' || needs.build.result == 'failure' || needs.attest.result == 'failure' || needs.publish.result == 'failure') }}
+    needs: [validate, metadata, preflight, ghostty_helper, build, attest, publish]
     runs-on: ubuntu-24.04
     permissions:
       contents: read

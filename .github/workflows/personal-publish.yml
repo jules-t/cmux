@@ -1,0 +1,421 @@
+name: Publish a verified cmux Personal build
+
+on:
+  workflow_call:
+    inputs:
+      build_run_id:
+        description: Workflow run containing the attested build artifact
+        required: true
+        type: string
+      promote_source:
+        description: Move personal/stable to the verified app source commit
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      PERSONAL_FORK_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Workflow run containing the attested build artifact
+        required: true
+        type: string
+      promote_source:
+        description: Move personal/stable to the verified app source commit
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  actions: read
+  attestations: read
+  contents: read
+
+concurrency:
+  group: cmux-personal-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      attestations: read
+      contents: read
+    steps:
+      - name: Inspect trusted build run and locate immutable artifact
+        id: source
+        env:
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$BUILD_RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "build_run_id must be a positive integer" >&2
+            exit 1
+          fi
+
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BUILD_RUN_ID}")"
+          if ! jq -e \
+              --arg repository "$GITHUB_REPOSITORY" \
+              '
+                .path == ".github/workflows/personal-build.yml"
+                and .head_branch == "personal-control"
+                and .repository.full_name == $repository
+                and .head_repository.full_name == $repository
+                and .event == "workflow_dispatch"
+                and (.status == "in_progress" or .status == "completed")
+                and (.head_sha | test("^[0-9a-f]{40}$"))
+              ' <<<"$run_json" >/dev/null; then
+            echo "build run does not satisfy the trusted-source policy" >&2
+            jq \
+              '{path, head_branch, repository: .repository.full_name, head_repository: .head_repository.full_name, event, status, head_sha}' \
+              <<<"$run_json" >&2
+            exit 1
+          fi
+          control_sha="$(jq -r '.head_sha' <<<"$run_json")"
+
+          jobs_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BUILD_RUN_ID}/jobs?per_page=100")"
+          for required_job in metadata ghostty_helper build attest; do
+            if ! jq -e \
+                --arg name "$required_job" \
+                '[.jobs[] | select(.name == $name and .conclusion == "success")] | length == 1' \
+                <<<"$jobs_json" >/dev/null; then
+              echo "required source job did not succeed exactly once: $required_job" >&2
+              jq '[.jobs[] | {name, conclusion}]' <<<"$jobs_json" >&2
+              exit 1
+            fi
+          done
+
+          artifact_json=""
+          for attempt in 1 2 3 4 5; do
+            echo "artifact lookup attempt ${attempt}/5"
+            artifacts_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BUILD_RUN_ID}/artifacts?per_page=100")"
+            if candidate="$(
+              jq -ce '
+                [
+                  .artifacts[]
+                  | select(
+                      (.expired | not)
+                      and (.name | test("^cmux-personal-personal-v[0-9]+\\.[0-9]+\\.[0-9]+-r[1-9][0-9]*$"))
+                    )
+                ]
+                | select(length == 1)
+                | .[0]
+              ' <<<"$artifacts_json"
+            )"; then
+              artifact_json="$candidate"
+              break
+            fi
+            sleep 2
+          done
+          if [[ -z "$artifact_json" ]]; then
+            echo "expected exactly one non-expired attested personal artifact" >&2
+            exit 1
+          fi
+
+          {
+            echo "control_sha=$control_sha"
+            echo "artifact_id=$(jq -r '.id' <<<"$artifact_json")"
+            echo "artifact_name=$(jq -r '.name' <<<"$artifact_json")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check out trusted current control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require source workflow commit to remain trusted
+        working-directory: control
+        env:
+          SOURCE_CONTROL_SHA: ${{ steps.source.outputs.control_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            '+refs/heads/personal-control:refs/remotes/origin/personal-control'
+          runtime_control_sha="$(git rev-parse HEAD)"
+          current_control_sha="$(git rev-parse refs/remotes/origin/personal-control)"
+          if [[ "$runtime_control_sha" != "$current_control_sha" ]]; then
+            echo "publication workflow is not running from current personal-control" >&2
+            echo "runtime: $runtime_control_sha" >&2
+            echo "current: $current_control_sha" >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$SOURCE_CONTROL_SHA" HEAD; then
+            echo "source workflow commit is not in current personal-control history" >&2
+            echo "source:  $SOURCE_CONTROL_SHA" >&2
+            echo "current: $(git rev-parse HEAD)" >&2
+            exit 1
+          fi
+
+      - name: Download immutable attested artifact
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          artifact-ids: ${{ steps.source.outputs.artifact_id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.build_run_id }}
+          path: dist
+
+      - name: Read constrained release identity
+        id: identity
+        env:
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+        run: |
+          set -euo pipefail
+          manifest="dist/cmux-personal-manifest.json"
+          source_sha="$(jq -er '.source_sha' "$manifest")"
+          base_tag="$(jq -er '.base_tag' "$manifest")"
+          personal_tag="$(jq -er '.personal_tag' "$manifest")"
+          repository="$(jq -er '.repository' "$manifest")"
+          workflow="$(jq -er '.workflow' "$manifest")"
+          workflow_run_id="$(jq -er '.workflow_run_id' "$manifest")"
+
+          [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$base_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$personal_tag" =~ ^personal-v[0-9]+\.[0-9]+\.[0-9]+-r[1-9][0-9]*$ ]]
+          [[ "$personal_tag" == "personal-${base_tag}-"* ]]
+          [[ "$repository" == "$GITHUB_REPOSITORY" ]]
+          [[ "$workflow_run_id" == "$BUILD_RUN_ID" ]]
+          [[ "$workflow" == "$GITHUB_REPOSITORY/.github/workflows/personal-build.yml@refs/heads/personal-control" ]]
+
+          {
+            echo "source_sha=$source_sha"
+            echo "base_tag=$base_tag"
+            echo "personal_tag=$personal_tag"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### Verified publication candidate"
+            echo ""
+            echo "- build run: \`$BUILD_RUN_ID\`"
+            echo "- artifact: \`${{ steps.source.outputs.artifact_name }}\`"
+            echo "- release: \`$personal_tag\`"
+            echo "- app source: \`$source_sha\`"
+            echo "- official base: \`$base_tag\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify release asset identity
+        env:
+          PYTHONPATH: ${{ github.workspace }}/control
+        run: |
+          python3 control/personal/verify_release_assets.py \
+            --config control/personal/config.json \
+            --directory dist \
+            --source-sha "${{ steps.identity.outputs.source_sha }}" \
+            --base-tag "${{ steps.identity.outputs.base_tag }}" \
+            --personal-tag "${{ steps.identity.outputs.personal_tag }}"
+
+      - name: Verify build provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify dist/cmux-personal-macos-arm64.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/personal-build.yml" \
+            --signer-digest "${{ steps.source.outputs.control_sha }}" \
+            --source-ref "refs/heads/personal-control" \
+            --source-digest "${{ steps.source.outputs.control_sha }}" \
+            --deny-self-hosted-runners
+
+      - name: Check out current personal state without persisted credentials
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: personal-control
+          path: state
+          persist-credentials: false
+
+      - name: Reject stale or conflicting publication state
+        env:
+          PYTHONPATH: ${{ github.workspace }}/control
+        run: |
+          python3 control/personal/state_manager.py check-promotion \
+            --state state/personal/state.json \
+            --base-tag "${{ steps.identity.outputs.base_tag }}" \
+            --personal-tag "${{ steps.identity.outputs.personal_tag }}" \
+            --source-sha "${{ steps.identity.outputs.source_sha }}"
+
+      - name: Durably claim publication before exposing the release
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN }}
+          PYTHONPATH: ${{ github.workspace }}/control
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "PERSONAL_FORK_TOKEN is required to claim publication" >&2
+            exit 1
+          fi
+          git -C state config user.name "cmux Personal automation"
+          git -C state config user.email "actions@users.noreply.github.com"
+          claim_recorded=false
+          for attempt in 1 2 3 4 5; do
+            echo "publication claim attempt ${attempt}/5"
+            git -C state fetch --no-tags origin \
+              '+refs/heads/personal-control:refs/remotes/origin/personal-control'
+            git -C state switch --detach refs/remotes/origin/personal-control
+            python3 control/personal/state_manager.py claim-publication \
+              --state state/personal/state.json \
+              --base-tag "${{ steps.identity.outputs.base_tag }}" \
+              --personal-tag "${{ steps.identity.outputs.personal_tag }}" \
+              --source-sha "${{ steps.identity.outputs.source_sha }}" \
+              --run-id "${{ inputs.build_run_id }}"
+            git -C state add personal/state.json
+            if git -C state diff --cached --quiet; then
+              claim_recorded=true
+              break
+            fi
+            git -C state commit \
+              -m "chore(personal): claim ${{ steps.identity.outputs.personal_tag }}"
+            if git -C state \
+                -c credential.helper= \
+                -c 'credential.helper=!gh auth git-credential' \
+                push origin HEAD:personal-control; then
+              claim_recorded=true
+              break
+            fi
+            echo "personal-control moved while claiming; retrying" >&2
+          done
+          if [[ "$claim_recorded" != true ]]; then
+            echo "could not durably claim publication after five attempts" >&2
+            exit 1
+          fi
+
+      - name: Observe personal/stable without moving it
+        if: ${{ !inputs.promote_source }}
+        id: observe_stable
+        run: |
+          set -euo pipefail
+          personal_stable_sha="$(
+            git ls-remote \
+              "https://github.com/${GITHUB_REPOSITORY}.git" \
+              refs/heads/personal/stable |
+              awk 'NR == 1 { print $1 }'
+          )"
+          if [[ ! "$personal_stable_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "could not resolve personal/stable" >&2
+            exit 1
+          fi
+          echo "personal_stable_sha=$personal_stable_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Promote verified source with an atomic lease
+        if: ${{ inputs.promote_source }}
+        id: promote_source
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN }}
+          SOURCE_SHA: ${{ steps.identity.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "PERSONAL_FORK_TOKEN is required for source promotion" >&2
+            exit 1
+          fi
+          expected_current_sha="$(
+            jq -r '.personal_stable_sha // empty' state/personal/state.json
+          )"
+          actual_sha="$(
+            git ls-remote \
+              "https://github.com/${GITHUB_REPOSITORY}.git" \
+              refs/heads/personal/stable |
+              awk 'NR == 1 { print $1 }'
+          )"
+          if [[ ! "$actual_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "could not resolve personal/stable" >&2
+            exit 1
+          fi
+          if [[ "$actual_sha" != "$SOURCE_SHA" ]]; then
+            if [[ -z "$expected_current_sha" || "$actual_sha" != "$expected_current_sha" ]]; then
+              echo "personal/stable moved independently; refusing promotion" >&2
+              echo "expected current: ${expected_current_sha:-unset}" >&2
+              echo "actual current:   $actual_sha" >&2
+              exit 1
+            fi
+            git -C control fetch --no-tags origin "$SOURCE_SHA"
+            git -C control \
+              -c credential.helper= \
+              -c 'credential.helper=!gh auth git-credential' \
+              push \
+              --force-with-lease="refs/heads/personal/stable:${expected_current_sha}" \
+              origin \
+              "${SOURCE_SHA}:refs/heads/personal/stable"
+          fi
+          promoted_sha="$(
+            git ls-remote \
+              "https://github.com/${GITHUB_REPOSITORY}.git" \
+              refs/heads/personal/stable |
+              awk 'NR == 1 { print $1 }'
+          )"
+          if [[ "$promoted_sha" != "$SOURCE_SHA" ]]; then
+            echo "personal/stable does not point to the verified source after promotion" >&2
+            exit 1
+          fi
+          echo "personal_stable_sha=$promoted_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Publish verified draft release
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN }}
+          PYTHONPATH: ${{ github.workspace }}/control
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "PERSONAL_FORK_TOKEN is required for publication" >&2
+            exit 1
+          fi
+          python3 control/personal/release_publisher.py publish \
+            --repo "$GITHUB_REPOSITORY" \
+            --directory dist \
+            --config control/personal/config.json \
+            --source-sha "${{ steps.identity.outputs.source_sha }}" \
+            --base-tag "${{ steps.identity.outputs.base_tag }}" \
+            --personal-tag "${{ steps.identity.outputs.personal_tag }}"
+
+      - name: Record verified publication state
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN }}
+          PERSONAL_STABLE_SHA: ${{ steps.promote_source.outputs.personal_stable_sha || steps.observe_stable.outputs.personal_stable_sha }}
+          PYTHONPATH: ${{ github.workspace }}/control
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "PERSONAL_FORK_TOKEN is required to record publication state" >&2
+            exit 1
+          fi
+          git -C state config user.name "cmux Personal automation"
+          git -C state config user.email "actions@users.noreply.github.com"
+          state_recorded=false
+          for attempt in 1 2 3 4 5; do
+            echo "publication state attempt ${attempt}/5"
+            git -C state fetch --no-tags origin \
+              '+refs/heads/personal-control:refs/remotes/origin/personal-control'
+            git -C state switch --detach refs/remotes/origin/personal-control
+            python3 control/personal/state_manager.py finalize-publication \
+              --state state/personal/state.json \
+              --base-tag "${{ steps.identity.outputs.base_tag }}" \
+              --personal-tag "${{ steps.identity.outputs.personal_tag }}" \
+              --source-sha "${{ steps.identity.outputs.source_sha }}" \
+              --personal-stable-sha "$PERSONAL_STABLE_SHA" \
+              --run-id "${{ inputs.build_run_id }}"
+            git -C state add personal/state.json
+            if git -C state diff --cached --quiet; then
+              state_recorded=true
+              break
+            fi
+            git -C state commit \
+              -m "chore(personal): record ${{ steps.identity.outputs.personal_tag }}"
+            if git -C state \
+                -c credential.helper= \
+                -c 'credential.helper=!gh auth git-credential' \
+                push origin HEAD:personal-control; then
+              state_recorded=true
+              break
+            fi
+            echo "personal-control moved while recording state; retrying" >&2
+          done
+          if [[ "$state_recorded" != true ]]; then
+            echo "release is public, but its durable claim still blocks stale recovery" >&2
+            echo "rerun this recovery workflow to reconcile final state" >&2
+            exit 1
+          fi

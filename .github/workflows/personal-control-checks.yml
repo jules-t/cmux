@@ -1,0 +1,36 @@
+name: Validate cmux Personal control plane
+
+on:
+  push:
+    branches:
+      - personal-control
+    paths:
+      - ".github/workflows/**"
+      - "personal/**"
+  pull_request:
+    branches:
+      - personal-control
+    paths:
+      - ".github/workflows/**"
+      - "personal/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmux-personal-control-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Run static and semantic control-plane checks
+        run: personal/ci/check_control_plane.sh "$GITHUB_WORKSPACE"

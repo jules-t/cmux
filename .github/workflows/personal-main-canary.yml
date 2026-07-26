@@ -126,8 +126,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
-      actions: write
-      contents: write
+      actions: read
+      contents: read
     steps:
       - name: Check out control plane
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -144,11 +144,15 @@ jobs:
 
       - name: Publish replaceable canary ref and dispatch build
         env:
-          GH_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN || github.token }}
+          GH_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN }}
           PYTHONPATH: ${{ github.workspace }}/control
           CANDIDATE_SHA: ${{ needs.canary.outputs.candidate_commit }}
         run: |
           set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "PERSONAL_FORK_TOKEN is required for canary publication" >&2
+            exit 1
+          fi
           python3 control/personal/candidate_manager.py clone-bundle \
             --bundle candidate-artifact/canary.bundle \
             --destination candidate \

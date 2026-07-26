@@ -2,6 +2,8 @@
   "schema_version": 1,
   "current_stable_tag": "v0.64.20",
   "last_promoted_personal_tag": null,
+  "personal_stable_sha": "f24a68e46de7dbee1b20fedab7a02c656dce4a17",
+  "publication_claim": null,
   "pending_observation": {
     "tag": null,
     "count": 0,
