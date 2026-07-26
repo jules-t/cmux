@@ -145,6 +145,39 @@ private func existsIn(_ existingPaths: Set<String>) -> @Sendable (String) -> Boo
 }
 
 @Suite struct TerminalOpenURLFilePathTests {
+    @Test func resolvesRelativeCodePath() {
+        let existingFile = "/Users/dev/project/data/load.py"
+        #expect(
+            TerminalPathResolver(fileExists: existsIn([existingFile])).resolveOpenURLFilePath(
+                "data/load.py",
+                cwd: "/Users/dev/project"
+            ) == existingFile
+        )
+    }
+
+    @Test func resolvesCodePathWithLineAndColumnSuffix() {
+        let existingFile = "/Users/dev/project/data/load.py"
+        let resolver = TerminalPathResolver(fileExists: existsIn([existingFile]))
+
+        #expect(resolver.resolveOpenURLFilePath("data/load.py:42", cwd: "/Users/dev/project") == existingFile)
+        #expect(resolver.resolveOpenURLFilePath("data/load.py:42:7", cwd: "/Users/dev/project") == existingFile)
+        #expect(resolver.resolveOpenURLFilePath("data/load.py#L42", cwd: "/Users/dev/project") == existingFile)
+        #expect(resolver.resolveOpenURLFilePath("data/load.py#L42C7", cwd: "/Users/dev/project") == existingFile)
+        #expect(resolver.resolveOpenURLFilePath("\"data/load.py\":42:7", cwd: "/Users/dev/project") == existingFile)
+        #expect(resolver.resolveOpenURLFilePath("'data/load.py':42:7", cwd: "/Users/dev/project") == existingFile)
+    }
+
+    @Test func prefersLiteralFilenameThatEndsInNumericLocationShape() {
+        let literal = "/Users/dev/project/data/load.py:42"
+        let stripped = "/Users/dev/project/data/load.py"
+        #expect(
+            TerminalPathResolver(fileExists: existsIn([literal, stripped])).resolveOpenURLFilePath(
+                "data/load.py:42",
+                cwd: "/Users/dev/project"
+            ) == literal
+        )
+    }
+
     @Test func resolvesAbsoluteMarkdownPathWithTrailingDot() {
         let existingFile = "/Users/dev/project/skills/marketing/data/lawrencecchen-tweets.md"
         #expect(
