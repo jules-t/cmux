@@ -33,6 +33,7 @@ struct TerminalLinkOpenCoordinator {
         let trimmed = request.rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let container = containerResolver(request.sourceWorkspaceId, request.sourcePanelId)
         var normalizedOpenURLString = request.rawValue
+        var resolvedLocalFilePath = false
 
         let canResolveLocalFilePath: Bool
         if let sourcePanelId = request.sourcePanelId, let container {
@@ -46,6 +47,7 @@ struct TerminalLinkOpenCoordinator {
                trimmed,
                cwd: resolvedWorkingDirectory(request: request, container: container)
            ) {
+            resolvedLocalFilePath = true
             let fileURL = URL(fileURLWithPath: resolvedPath)
             if CommandClickFileOpenRouter.shouldRouteInCmux(
                 path: resolvedPath,
@@ -60,6 +62,15 @@ struct TerminalLinkOpenCoordinator {
                 )
             }
             normalizedOpenURLString = resolvedPath
+        }
+
+        if !resolvedLocalFilePath,
+           TerminalOpenURLFileRoutingPolicy().shouldPreventBrowserFallback(
+               rawOpenURLValue: trimmed
+           ) {
+            log("link.openURL unresolved local path; suppressing browser fallback raw=\(trimmed)")
+            NSSound.beep()
+            return true
         }
 
         guard let target = resolveTerminalOpenURLTarget(normalizedOpenURLString) else {
