@@ -831,6 +831,10 @@ class TabManager: ObservableObject {
 
     @discardableResult
     func startSearch() -> Bool {
+        if let panel = focusedTextFilePreviewPanel {
+            return panel.performTextPreviewFindAction(.showFindInterface)
+        }
+
         if let panel = selectedTerminalPanel {
             let hadExistingSearch = panel.searchState != nil
             panel.hostedView.preparePanelFocusIntentForActivation(.findField)
@@ -873,6 +877,11 @@ class TabManager: ObservableObject {
     }
 
     func findNext() {
+        if let panel = focusedTextFilePreviewPanel {
+            _ = panel.performTextPreviewFindAction(.nextMatch)
+            return
+        }
+
         if let panel = selectedTerminalPanel {
             _ = TerminalSearchNavigation.next.perform { panel.performBindingAction($0) }
             return
@@ -882,6 +891,11 @@ class TabManager: ObservableObject {
     }
 
     func findPrevious() {
+        if let panel = focusedTextFilePreviewPanel {
+            _ = panel.performTextPreviewFindAction(.previousMatch)
+            return
+        }
+
         if let panel = selectedTerminalPanel {
             _ = TerminalSearchNavigation.previous.perform { panel.performBindingAction($0) }
             return
