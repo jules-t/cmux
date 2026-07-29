@@ -47,6 +47,37 @@ struct FilePreviewTextEditorTextKitTests {
         #expect(textView.layoutManager?.allowsNonContiguousLayout == true)
     }
 
+    @Test("find commands route to the focused text file preview")
+    func findCommandsRouteToFocusedTextFilePreview() throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cmux-file-preview-find-\(UUID().uuidString)")
+            .appendingPathExtension("swift")
+        try "let value = 42\n".write(to: fileURL, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let manager = TabManager(autoWelcomeIfNeeded: false)
+        let workspace = manager.addWorkspace(select: true, eagerLoadTerminal: false)
+        defer { workspace.teardownAllPanels() }
+        let pane = try #require(workspace.bonsplitController.allPaneIds.first)
+        let panel = try #require(workspace.newFilePreviewSurface(
+            inPane: pane,
+            filePath: fileURL.path,
+            focus: true
+        ))
+        let textView = FindActionRecordingTextView()
+        panel.attachTextView(textView)
+
+        #expect(manager.startSearch())
+        manager.findNext()
+        manager.findPrevious()
+
+        #expect(textView.actions == [
+            .showFindInterface,
+            .nextMatch,
+            .previousMatch,
+        ])
+    }
+
     @Test("text preview editor handles standard zoom key equivalents")
     func editorHandlesStandardZoomKeyEquivalents() throws {
         try withDefaultShortcutSettings {
@@ -334,5 +365,17 @@ struct FilePreviewTextEditorTextKitTests {
             saveCount += 1
             return nil
         }
+    }
+}
+
+private final class FindActionRecordingTextView: NSTextView {
+    private(set) var actions: [NSTextFinder.Action] = []
+
+    override func performFindPanelAction(_ sender: Any?) {
+        guard let menuItem = sender as? NSMenuItem,
+              let action = NSTextFinder.Action(rawValue: menuItem.tag) else {
+            return
+        }
+        actions.append(action)
     }
 }
