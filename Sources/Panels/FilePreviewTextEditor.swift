@@ -20,6 +20,7 @@ struct FilePreviewTextEditor<PanelModel>: NSViewRepresentable where PanelModel: 
     let themeBackgroundColor: NSColor
     let themeForegroundColor: NSColor
     let drawsBackground: Bool
+    let showsIndentationGuides: Bool
     let wordWrap: Bool
     let syntaxLanguage: FilePreviewSyntaxLanguage?
     let syntaxHighlightingEnabled: Bool
@@ -50,6 +51,10 @@ struct FilePreviewTextEditor<PanelModel>: NSViewRepresentable where PanelModel: 
 
         scrollView.documentView = textView
         textView.applyFilePreviewWordWrap(wordWrap, scrollView: scrollView)
+        textView.configureFilePreviewIndentationGuides(
+            enabled: showsIndentationGuides,
+            color: themeForegroundColor.withAlphaComponent(0.14)
+        )
         Self.applyTheme(
             to: scrollView,
             backgroundColor: themeBackgroundColor,
@@ -78,6 +83,10 @@ struct FilePreviewTextEditor<PanelModel>: NSViewRepresentable where PanelModel: 
         textView.panel = panel
         textView.applyFilePreviewTextEditorInsets()
         textView.applyFilePreviewWordWrap(wordWrap, scrollView: scrollView)
+        textView.configureFilePreviewIndentationGuides(
+            enabled: showsIndentationGuides,
+            color: themeForegroundColor.withAlphaComponent(0.14)
+        )
         panel.attachTextView(textView)
         let highlightConfigChanged = textView.configureSyntaxHighlighting(
             language: syntaxLanguage,
@@ -184,7 +193,7 @@ extension SavingTextView {
         // stack is the only way to guarantee `textLayoutManager == nil`, i.e. a pure TextKit 1 view
         // whose hit-testing uses `NSLayoutManager` (O(log N) with non-contiguous layout).
         let textStorage = NSTextStorage()
-        let layoutManager = NSLayoutManager()
+        let layoutManager = FilePreviewIndentGuideLayoutManager()
         // Lazy glyph layout so multi-hundred-thousand-line documents still open instantly.
         layoutManager.allowsNonContiguousLayout = true
         textStorage.addLayoutManager(layoutManager)
