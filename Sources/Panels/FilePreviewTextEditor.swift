@@ -598,6 +598,15 @@ extension FilePreviewPanel {
     }
 
     @discardableResult
+    func performTextPreviewFindAction(_ action: NSTextFinder.Action) -> Bool {
+        guard previewMode == .text, let textView else { return false }
+        let sender = NSMenuItem()
+        sender.tag = action.rawValue
+        textView.performFindPanelAction(sender)
+        return true
+    }
+
+    @discardableResult
     func zoomTextPreviewIn() -> Bool {
         guard previewMode == .text,
               let textView = textView as? SavingTextView else { return false }
