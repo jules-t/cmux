@@ -106,6 +106,45 @@ struct FilePreviewTextEditorTextKitTests {
         ])
     }
 
+    @Test("indent guides identify tabs and complete space indentation levels")
+    func indentGuideOffsetsFollowLeadingWhitespace() {
+        let spaces = "        value" as NSString
+        let tabs = "\t\tvalue" as NSString
+        let mixed = "    \tvalue" as NSString
+        let partial = "  value" as NSString
+
+        #expect(FilePreviewIndentGuideCalculator.guideUTF16Offsets(
+            in: spaces,
+            lineRange: NSRange(location: 0, length: spaces.length)
+        ) == [0, 4])
+        #expect(FilePreviewIndentGuideCalculator.guideUTF16Offsets(
+            in: tabs,
+            lineRange: NSRange(location: 0, length: tabs.length)
+        ) == [0, 1])
+        #expect(FilePreviewIndentGuideCalculator.guideUTF16Offsets(
+            in: mixed,
+            lineRange: NSRange(location: 0, length: mixed.length)
+        ) == [0, 4])
+        #expect(FilePreviewIndentGuideCalculator.guideUTF16Offsets(
+            in: partial,
+            lineRange: NSRange(location: 0, length: partial.length)
+        ).isEmpty)
+    }
+
+    @Test("indent guides preserve whitespace and the pure TextKit 1 editor")
+    func indentGuidesPreserveEditorContentAndTextKit1() {
+        let textView = SavingTextView.makeFilePreviewTextView()
+        let source = "\t\tlet value = 42\n"
+        textView.string = source
+
+        textView.configureFilePreviewIndentationGuides(enabled: true, color: .white)
+
+        #expect(textView.string == source)
+        #expect(textView.layoutManager is FilePreviewIndentGuideLayoutManager)
+        #expect((textView.layoutManager as? FilePreviewIndentGuideLayoutManager)?.showsIndentationGuides == true)
+        #expect(textView.textLayoutManager == nil)
+    }
+
     @Test("text preview editor handles standard zoom key equivalents")
     func editorHandlesStandardZoomKeyEquivalents() throws {
         try withDefaultShortcutSettings {
