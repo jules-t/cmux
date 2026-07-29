@@ -47,6 +47,34 @@ struct FilePreviewTextEditorTextKitTests {
         #expect(textView.layoutManager?.allowsNonContiguousLayout == true)
     }
 
+    @Test("line map follows NSString line boundaries and UTF-16 offsets")
+    func lineMapUsesTextKitOffsets() {
+        let lineMap = FilePreviewLineMap(source: "first\r\nsecond\n😀\n")
+
+        #expect(lineMap.lineStartUTF16Offsets == [0, 7, 14, 17])
+        #expect(lineMap.lineCount == 4)
+        #expect(lineMap.lineNumber(containingUTF16Offset: 0) == 1)
+        #expect(lineMap.lineNumber(containingUTF16Offset: 8) == 2)
+        #expect(lineMap.lineNumber(containingUTF16Offset: 15) == 3)
+        #expect(lineMap.lineNumber(containingUTF16Offset: 17) == 4)
+    }
+
+    @Test("line number ruler keeps the editor on TextKit 1")
+    func lineNumberRulerPreservesTextKit1() {
+        let scrollView = NSScrollView()
+        let textView = SavingTextView.makeFilePreviewTextView()
+        scrollView.documentView = textView
+
+        textView.configureLineNumberRuler(in: scrollView, enabled: true)
+        #expect(scrollView.hasVerticalRuler)
+        #expect(scrollView.verticalRulerView is FilePreviewLineNumberRulerView)
+        #expect(textView.textLayoutManager == nil)
+
+        textView.configureLineNumberRuler(in: scrollView, enabled: false)
+        #expect(!scrollView.hasVerticalRuler)
+        #expect(scrollView.verticalRulerView == nil)
+    }
+
     @Test("find commands route to the focused text file preview")
     func findCommandsRouteToFocusedTextFilePreview() throws {
         let fileURL = FileManager.default.temporaryDirectory
