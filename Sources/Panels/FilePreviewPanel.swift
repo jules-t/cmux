@@ -1360,6 +1360,7 @@ struct FilePreviewPanelView: View {
                     themeBackgroundColor: contentBackgroundColor,
                     themeForegroundColor: themeForegroundColor,
                     drawsBackground: appearance.drawsContentBackground,
+                    showsIndentationGuides: true,
                     wordWrap: fileEditorWordWrap,
                     showsLineNumbers: true,
                     syntaxLanguage: FilePreviewSyntaxLanguage.detect(for: panel.fileURL),

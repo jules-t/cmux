@@ -105,6 +105,7 @@ struct MarkdownPanelView: View {
                     themeBackgroundColor: appearance.contentBackgroundColor,
                     themeForegroundColor: themeForegroundColor,
                     drawsBackground: appearance.drawsContentBackground,
+                    showsIndentationGuides: false,
                     wordWrap: fileEditorWordWrap,
                     showsLineNumbers: false,
                     syntaxLanguage: FilePreviewSyntaxLanguage.detect(for: URL(fileURLWithPath: panel.filePath)),
