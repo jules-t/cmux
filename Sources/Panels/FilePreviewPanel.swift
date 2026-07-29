@@ -1436,6 +1436,7 @@ struct FilePreviewPanelView: View {
                     themeForegroundColor: themeForegroundColor,
                     drawsBackground: appearance.drawsContentBackground,
                     wordWrap: fileEditorWordWrap,
+                    showsLineNumbers: true,
                     syntaxLanguage: FilePreviewSyntaxLanguage.detect(for: panel.fileURL),
                     syntaxHighlightingEnabled: fileEditorSyntaxHighlighting
                 )
