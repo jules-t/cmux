@@ -21,6 +21,7 @@ struct FilePreviewTextEditor<PanelModel>: NSViewRepresentable where PanelModel: 
     let themeForegroundColor: NSColor
     let drawsBackground: Bool
     let wordWrap: Bool
+    let showsLineNumbers: Bool
     let syntaxLanguage: FilePreviewSyntaxLanguage?
     let syntaxHighlightingEnabled: Bool
 
@@ -49,6 +50,7 @@ struct FilePreviewTextEditor<PanelModel>: NSViewRepresentable where PanelModel: 
         panel.attachTextView(textView)
 
         scrollView.documentView = textView
+        textView.configureLineNumberRuler(in: scrollView, enabled: showsLineNumbers)
         textView.applyFilePreviewWordWrap(wordWrap, scrollView: scrollView)
         Self.applyTheme(
             to: scrollView,
@@ -68,17 +70,18 @@ struct FilePreviewTextEditor<PanelModel>: NSViewRepresentable where PanelModel: 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.panel = panel
         scrollView.isHidden = !isVisibleInUI
+        guard let textView = scrollView.documentView as? SavingTextView else { return }
+        textView.panel = panel
+        textView.applyFilePreviewTextEditorInsets()
+        textView.configureLineNumberRuler(in: scrollView, enabled: showsLineNumbers)
+        textView.applyFilePreviewWordWrap(wordWrap, scrollView: scrollView)
+        panel.attachTextView(textView)
         Self.applyTheme(
             to: scrollView,
             backgroundColor: themeBackgroundColor,
             foregroundColor: themeForegroundColor,
             drawsBackground: drawsBackground
         )
-        guard let textView = scrollView.documentView as? SavingTextView else { return }
-        textView.panel = panel
-        textView.applyFilePreviewTextEditorInsets()
-        textView.applyFilePreviewWordWrap(wordWrap, scrollView: scrollView)
-        panel.attachTextView(textView)
 
         let highlightConfigChanged = textView.configureSyntaxHighlighting(
             language: syntaxLanguage,
@@ -91,6 +94,7 @@ struct FilePreviewTextEditor<PanelModel>: NSViewRepresentable where PanelModel: 
             context.coordinator.isApplyingPanelUpdate = true
             textView.string = panel.textContent
             context.coordinator.isApplyingPanelUpdate = false
+            textView.lineNumberRulerView?.refreshLineNumbers()
         }
 
         if textChanged || highlightConfigChanged {
@@ -101,6 +105,7 @@ struct FilePreviewTextEditor<PanelModel>: NSViewRepresentable where PanelModel: 
     static func dismantleNSView(_ scrollView: NSScrollView, coordinator: Coordinator) {
         guard let textView = scrollView.documentView as? SavingTextView else { return }
         textView.cancelSyntaxHighlightingWork()
+        textView.configureLineNumberRuler(in: scrollView, enabled: false)
         textView.delegate = nil
         textView.panel = nil
     }
@@ -121,6 +126,13 @@ struct FilePreviewTextEditor<PanelModel>: NSViewRepresentable where PanelModel: 
             textView.backgroundColor = resolvedBackgroundColor
             textView.textColor = foregroundColor
             textView.insertionPointColor = foregroundColor
+        }
+        if let ruler = scrollView.verticalRulerView as? FilePreviewLineNumberRulerView {
+            ruler.configureAppearance(
+                backgroundColor: backgroundColor,
+                foregroundColor: foregroundColor,
+                drawsBackground: drawsBackground
+            )
         }
     }
 
@@ -252,6 +264,7 @@ final class SavingTextView: NSTextView {
     ]
 
     weak var panel: (any FilePreviewTextEditingPanel)?
+    weak var lineNumberRulerView: FilePreviewLineNumberRulerView?
     private var previewFontSize: CGFloat = 13
     private var pendingEditorShortcutChordPrefix: ShortcutStroke?
     private var fontMagnificationObserver: GlobalFontMagnificationChangeObserver?
@@ -370,10 +383,12 @@ final class SavingTextView: NSTextView {
         let nextFont = GlobalFontMagnification.monospacedSystemFont(ofSize: previewFontSize, weight: .regular)
         font = nextFont
         typingAttributes[.font] = nextFont
+        lineNumberRulerView?.refreshMetrics()
     }
 
     override func didChangeText() {
         super.didChangeText()
+        lineNumberRulerView?.refreshLineNumbers()
         guard canApplySyntaxHighlighting || hasSyntaxHighlightingAttributes else { return }
         scheduleSyntaxHighlightRefresh()
     }
