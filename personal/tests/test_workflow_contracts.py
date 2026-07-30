@@ -144,6 +144,17 @@ jobs:
         validate_publish_workflow(path, text, parse_jobs(path, text), errors)
         self.assertTrue(any("durably claim" in error for error in errors))
 
+    def test_recovery_ensures_an_exact_reservation_before_publication(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        path = repository / ".github" / "workflows" / "personal-publish.yml"
+        text = path.read_text(encoding="utf-8").replace(
+            "release_publisher.py ensure-reservation",
+            "release_publisher.py missing-reservation",
+        )
+        errors: list[str] = []
+        validate_publish_workflow(path, text, parse_jobs(path, text), errors)
+        self.assertTrue(any("exact reservation" in error for error in errors))
+
     def test_source_promotion_requires_an_atomic_lease(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]
         path = repository / ".github" / "workflows" / "personal-publish.yml"

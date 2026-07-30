@@ -258,6 +258,39 @@ class ReleasePublisherTests(unittest.TestCase):
 
         self.assertFalse(any(call[:2] == ("release", "edit") for call in github.calls))
 
+    def test_ensure_reservation_creates_a_missing_exact_draft(self) -> None:
+        github = GitHubStub()
+
+        with mock.patch.object(release_publisher, "gh", side_effect=github):
+            release = release_publisher.ensure_release_reservation(
+                repository=REPOSITORY,
+                personal_tag=PERSONAL_TAG,
+                source_sha=SOURCE_SHA,
+                base_tag=BASE_TAG,
+                run_url="https://github.example/runs/1",
+            )
+
+        self.assertTrue(release["draft"])
+        create = next(call for call in github.calls if call[:2] == ("release", "create"))
+        self.assertEqual(create[create.index("--target") + 1], SOURCE_SHA)
+
+    def test_ensure_reservation_preserves_an_exact_partial_draft(self) -> None:
+        github = GitHubStub(release=draft_release())
+        github.assets = [{"name": "partial.zip", "size": 1, "digest": "sha256:bad"}]
+
+        with mock.patch.object(release_publisher, "gh", side_effect=github):
+            release = release_publisher.ensure_release_reservation(
+                repository=REPOSITORY,
+                personal_tag=PERSONAL_TAG,
+                source_sha=SOURCE_SHA,
+                base_tag=BASE_TAG,
+            )
+
+        self.assertTrue(release["draft"])
+        self.assertFalse(
+            any(call[:2] in {("release", "create"), ("release", "edit")} for call in github.calls)
+        )
+
     def make_assets(
         self,
         directory: pathlib.Path,
