@@ -180,6 +180,42 @@ jobs:
         self.assertIn("gh attestation verify", text)
         self.assertIn("review-cmux-resolution.txt", text)
 
+    def test_conflict_resolvers_use_narrow_rebase_permissions(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        config = (
+            repository / ".github" / "codex" / "resolver-config.toml"
+        ).read_text(encoding="utf-8")
+        self.assertIn('extends = ":workspace"', config)
+        self.assertIn('".git" = "write"', config)
+        self.assertIn('".agents" = "read"', config)
+        self.assertIn('".codex" = "read"', config)
+        self.assertNotIn(":danger-full-access", config)
+        self.assertNotIn("enabled = true", config)
+
+        for workflow_name in ("personal-main-canary.yml", "personal-update.yml"):
+            with self.subTest(workflow=workflow_name):
+                text = (
+                    repository / ".github" / "workflows" / workflow_name
+                ).read_text(encoding="utf-8")
+                self.assertIn(
+                    "control/.github/codex/resolver-config.toml",
+                    text,
+                )
+                self.assertIn(
+                    "codex-home: ${{ runner.temp }}/resolver-codex-home",
+                    text,
+                )
+                self.assertIn(
+                    'permission-profile: "rebase-workspace"',
+                    text,
+                )
+                self.assertNotIn(
+                    "permission-profile: \":workspace\"\n"
+                    "          safety-strategy: drop-sudo\n"
+                    "          working-directory: ${{ github.workspace }}/source",
+                    text,
+                )
+
     def test_stable_update_rebases_from_a_recorded_main_base_when_present(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]
         text = (

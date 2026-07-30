@@ -230,12 +230,20 @@ jobs:
           cp "$RUNNER_TEMP/resolver-conflict.json" source/personal-conflict-result.json
           cp control/personal/conflict-policy.json source/personal-conflict-policy.json
 
+      - name: Configure least-privilege rebase permissions
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$RUNNER_TEMP/resolver-codex-home"
+          install -m 600 control/.github/codex/resolver-config.toml \
+            "$RUNNER_TEMP/resolver-codex-home/config.toml"
+
       - name: Resolve compatible conflicts with Codex
         id: resolver
         uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          permission-profile: ":workspace"
+          codex-home: ${{ runner.temp }}/resolver-codex-home
+          permission-profile: "rebase-workspace"
           safety-strategy: drop-sudo
           working-directory: ${{ github.workspace }}/source
           prompt-file: ${{ github.workspace }}/control/.github/codex/prompts/resolve-cmux-conflicts.txt
