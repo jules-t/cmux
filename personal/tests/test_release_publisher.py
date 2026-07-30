@@ -11,6 +11,11 @@ from unittest import mock
 
 from personal import release_publisher
 from personal.common import ControlError
+from personal.tests.test_official_runtime_manifest import nightly_manifest_fixture
+from personal.tests.test_verify_release_assets import (
+    CONFIG as RELEASE_ASSET_CONFIG,
+    write_app_archive,
+)
 
 
 REPOSITORY = "owner/repository"
@@ -307,6 +312,66 @@ class ReleasePublisherTests(unittest.TestCase):
             path.write_bytes(payload)
             expected[name] = (len(payload), hashlib.sha256(payload).hexdigest())
         return config, expected
+
+    def make_main_assets(
+        self,
+        directory: pathlib.Path,
+        *,
+        upstream_main_sha: str,
+    ) -> dict[str, str]:
+        config = dict(RELEASE_ASSET_CONFIG)
+        archive = directory / config["artifact_name"]
+        write_app_archive(
+            archive,
+            source_sha=SOURCE_SHA,
+            upstream_main_sha=upstream_main_sha,
+            runtime_manifest=nightly_manifest_fixture(),
+        )
+        digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+        manifest = {
+            "repository": config["fork_repository"],
+            "upstream_repository": config["upstream_repository"],
+            "bundle_identifier": config["bundle_identifier"],
+            "architecture": config["architecture"],
+            "archive_name": archive.name,
+            "archive_sha256": digest,
+            "archive_size": archive.stat().st_size,
+            "source_sha": SOURCE_SHA,
+            "base_tag": BASE_TAG,
+            "personal_tag": PERSONAL_TAG,
+            "upstream_main_sha": upstream_main_sha,
+        }
+        (directory / config["manifest_name"]).write_text(
+            json.dumps(manifest),
+            encoding="utf-8",
+        )
+        (directory / f"{archive.name}.sha256").write_text(
+            f"{digest}  {archive.name}\n",
+            encoding="utf-8",
+        )
+        return config
+
+    def test_publish_accepts_main_based_assets_with_exact_upstream_identity(self) -> None:
+        github = GitHubStub(release=draft_release())
+        upstream_main_sha = "d" * 40
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            config = self.make_main_assets(
+                directory,
+                upstream_main_sha=upstream_main_sha,
+            )
+            with mock.patch.object(release_publisher, "gh", side_effect=github):
+                result = release_publisher.publish_release(
+                    repository=REPOSITORY,
+                    directory=directory,
+                    config=config,
+                    source_sha=SOURCE_SHA,
+                    base_tag=BASE_TAG,
+                    personal_tag=PERSONAL_TAG,
+                    upstream_main_sha=upstream_main_sha,
+                )
+
+        self.assertFalse(result["draft"])
 
     def test_publish_uploads_a_draft_then_verifies_and_publishes_it(self) -> None:
         github = GitHubStub(release=draft_release())
