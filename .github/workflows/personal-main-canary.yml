@@ -382,6 +382,21 @@ jobs:
             --bundle review-context/candidate-resolved.bundle \
             --destination candidate \
             --expected-commit "${{ needs.resolve.outputs.candidate_commit }}"
+          expected_source_commit="$(
+            jq -er '.source_commit | select(type == "string" and test("^[0-9a-f]{40}$"))' \
+              review-context/baseline.json
+          )"
+          git -C candidate fetch --no-tags --force \
+            "https://github.com/${GITHUB_REPOSITORY}.git" \
+            '+refs/heads/personal/stable:refs/remotes/personal-source/stable'
+          fetched_source_commit="$(
+            git -C candidate rev-parse 'refs/remotes/personal-source/stable^{commit}'
+          )"
+          if [[ "$fetched_source_commit" != "$expected_source_commit" ]]; then
+            echo "personal/stable moved while its candidate was under review" >&2
+            exit 1
+          fi
+          git -C candidate cat-file -e "${expected_source_commit}^{commit}"
 
       - name: Independently review the resolution
         uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1

@@ -215,6 +215,18 @@ jobs:
                     "          working-directory: ${{ github.workspace }}/source",
                     text,
                 )
+                self.assertIn(
+                    ".source_commit | select(type == \"string\"",
+                    text,
+                )
+                self.assertIn(
+                    "refs/remotes/personal-source/stable",
+                    text,
+                )
+                self.assertIn(
+                    'if [[ "$fetched_source_commit" != "$expected_source_commit" ]]',
+                    text,
+                )
 
     def test_stable_update_rebases_from_a_recorded_main_base_when_present(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]

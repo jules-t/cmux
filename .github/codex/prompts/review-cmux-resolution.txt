@@ -6,6 +6,9 @@ The candidate repository is your working directory. Read:
 - ../review-context/resolver-output.json
 - ../review-context/conflict-policy.json
 
+The exact original personal source commit recorded as `source_commit` in `baseline.json`, including
+its ancestors, is available in the candidate repository's object database for direct comparison.
+
 Review the complete target-to-candidate diff and the original personal commit sequence. Verify that:
 1. The target cmux release remains the candidate's ancestor and its behavior was not deleted or bypassed.
 2. Every personal behavior survives, including file-preview syntax highlighting and its setting.
