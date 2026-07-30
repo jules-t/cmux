@@ -146,6 +146,7 @@ def rebase_candidate(
         [
             "git",
             "rebase",
+            "--rebase-merges",
             "--onto",
             baseline["target_commit"],
             baseline["current_base_commit"],

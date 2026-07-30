@@ -127,6 +127,63 @@ class CandidateManagerTests(unittest.TestCase):
         self.assertTrue(result["eligible_for_agent"])
         self.assertEqual(result["conflicted_paths"], ["feature.txt"])
 
+    def test_clean_rebase_preserves_personal_merge_topology(self) -> None:
+        command(self.repo, "switch", "personal/stable")
+        personal_root = command(self.repo, "rev-parse", "HEAD")
+
+        command(self.repo, "switch", "-c", "personal-line-numbers", personal_root)
+        write(self.repo / "line-numbers.txt", "line numbers\n")
+        command(self.repo, "add", ".")
+        command(self.repo, "commit", "-m", "personal line numbers")
+
+        command(self.repo, "switch", "-c", "personal-indent-guides", personal_root)
+        write(self.repo / "indent-guides.txt", "indent guides\n")
+        command(self.repo, "add", ".")
+        command(self.repo, "commit", "-m", "personal indent guides")
+
+        command(self.repo, "switch", "personal/stable")
+        command(
+            self.repo,
+            "merge",
+            "--no-ff",
+            "personal-line-numbers",
+            "-m",
+            "merge personal line numbers",
+        )
+        command(
+            self.repo,
+            "merge",
+            "--no-ff",
+            "personal-indent-guides",
+            "-m",
+            "merge personal indent guides",
+        )
+
+        baseline = make_baseline(
+            self.repo,
+            source_ref="personal/stable",
+            current_base_ref="v1.0.0",
+            target_ref="v1.0.1",
+            candidate_branch="candidate/personal-v1.0.1",
+            policy=POLICY,
+        )
+        result = rebase_candidate(self.repo, baseline, POLICY, leave_conflicts=False)
+        self.assertEqual(result["status"], "clean")
+        verification = verify_candidate(self.repo, baseline=baseline, policy=POLICY)
+        self.assertTrue(verification["verified"])
+        self.assertEqual(
+            command(
+                self.repo,
+                "rev-list",
+                "--count",
+                "--merges",
+                f"{baseline['target_commit']}..HEAD",
+            ),
+            "2",
+        )
+        self.assertTrue((self.repo / "line-numbers.txt").exists())
+        self.assertTrue((self.repo / "indent-guides.txt").exists())
+
     def test_rejects_a_target_that_rewrites_the_recorded_upstream_base(self) -> None:
         command(self.repo, "switch", "--orphan", "rewritten")
         write(self.repo / "unrelated.txt", "rewritten history\n")
