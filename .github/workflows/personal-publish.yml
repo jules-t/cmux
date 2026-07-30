@@ -397,7 +397,8 @@ jobs:
             --config control/personal/config.json \
             --source-sha "${{ steps.identity.outputs.source_sha }}" \
             --base-tag "${{ steps.identity.outputs.base_tag }}" \
-            --personal-tag "${{ steps.identity.outputs.personal_tag }}"
+            --personal-tag "${{ steps.identity.outputs.personal_tag }}" \
+            --upstream-main-sha "${{ steps.identity.outputs.upstream_main_sha }}"
 
       - name: Record verified publication state
         env:

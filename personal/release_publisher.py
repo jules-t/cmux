@@ -479,6 +479,7 @@ def publish_release(
     source_sha: str,
     base_tag: str,
     personal_tag: str,
+    upstream_main_sha: str | None = None,
 ) -> dict[str, Any]:
     require_token()
     repository = require_repository(repository)
@@ -492,6 +493,7 @@ def publish_release(
         source_sha=source_sha,
         base_tag=base_tag,
         personal_tag=personal_tag,
+        upstream_main_sha=upstream_main_sha,
     )
     expected = expected_asset_metadata(paths)
 
@@ -571,6 +573,7 @@ def build_parser() -> argparse.ArgumentParser:
     publish.add_argument("--source-sha", required=True)
     publish.add_argument("--base-tag", required=True)
     publish.add_argument("--personal-tag", required=True)
+    publish.add_argument("--upstream-main-sha", default="")
     return parser
 
 
@@ -603,6 +606,7 @@ def main() -> int:
         source_sha=args.source_sha,
         base_tag=args.base_tag,
         personal_tag=args.personal_tag,
+        upstream_main_sha=args.upstream_main_sha or None,
     )
     print(f"release publication: {args.personal_tag} is public and verified")
     return 0
