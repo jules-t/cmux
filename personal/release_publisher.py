@@ -366,6 +366,39 @@ def reserve_release(
     return release
 
 
+def ensure_release_reservation(
+    *,
+    repository: str,
+    personal_tag: str,
+    source_sha: str,
+    base_tag: str,
+    run_url: str | None = None,
+) -> dict[str, Any]:
+    require_token()
+    repository = require_repository(repository)
+    base_tag = require_release_tag(base_tag)
+    source_sha = require_source_sha(source_sha)
+    personal_tag = require_personal_tag(personal_tag, base_tag)
+
+    release = find_release(repository, personal_tag)
+    if release is None:
+        try:
+            return reserve_release(
+                repository=repository,
+                personal_tag=personal_tag,
+                source_sha=source_sha,
+                base_tag=base_tag,
+                run_url=run_url,
+            )
+        except ControlError:
+            release = find_release(repository, personal_tag)
+            if release is None:
+                raise
+
+    require_release_source(repository, release, personal_tag, source_sha)
+    return release
+
+
 def sha256(path: pathlib.Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -521,6 +554,16 @@ def build_parser() -> argparse.ArgumentParser:
     reserve.add_argument("--base-tag", required=True)
     reserve.add_argument("--run-url")
 
+    ensure = subparsers.add_parser(
+        "ensure-reservation",
+        help="create a missing exact draft or preserve an exact recovery release",
+    )
+    ensure.add_argument("--repo", required=True)
+    ensure.add_argument("--personal-tag", required=True)
+    ensure.add_argument("--source-sha", required=True)
+    ensure.add_argument("--base-tag", required=True)
+    ensure.add_argument("--run-url")
+
     publish = subparsers.add_parser("publish", help="publish verified release assets")
     publish.add_argument("--repo", required=True)
     publish.add_argument("--directory", required=True)
@@ -542,6 +585,16 @@ def main() -> int:
             run_url=args.run_url,
         )
         print(f"release reservation: {args.personal_tag} is an exact draft")
+        return 0
+    if args.command == "ensure-reservation":
+        ensure_release_reservation(
+            repository=args.repo,
+            personal_tag=args.personal_tag,
+            source_sha=args.source_sha,
+            base_tag=args.base_tag,
+            run_url=args.run_url,
+        )
+        print(f"release reservation: {args.personal_tag} is exact and recoverable")
         return 0
     publish_release(
         repository=args.repo,

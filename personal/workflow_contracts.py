@@ -15,7 +15,7 @@ JOB_IF_RE = re.compile(r"^    if:", re.MULTILINE)
 USES_RE = re.compile(r"^\s+(?:-\s+)?uses:\s*([^#\s]+)", re.MULTILINE)
 PERSONAL_TOKEN = "${{ secrets.PERSONAL_FORK_TOKEN }}"
 MUTATION_MARKERS = (
-    r"release_publisher\.py\s+(?:reserve|publish)",
+    r"release_publisher\.py\s+(?:reserve|ensure-reservation|publish)",
     r"state_manager\.py\s+(?:claim-publication|finalize-publication)",
     r"candidate_manager\.py\s+publish",
     r"\bgh workflow run\b",
@@ -345,6 +345,14 @@ def validate_publish_workflow(
         ),
         None,
     )
+    reservation = next(
+        (
+            index
+            for index, step in enumerate(steps)
+            if "release_publisher.py ensure-reservation" in step.text
+        ),
+        None,
+    )
     publication = next(
         (
             index
@@ -384,13 +392,21 @@ def validate_publish_workflow(
             errors.append(
                 f"{path}: publication claim is not durably pushed before release exposure"
             )
+    if reservation is None:
+        errors.append(
+            f"{path}: recovery must ensure an exact reservation before publication"
+        )
+    elif (
+        claim is not None
+        and publication is not None
+        and not claim < reservation < publication
+    ):
+        errors.append(
+            f"{path}: exact reservation must follow the durable claim and precede publication"
+        )
     if "group: cmux-personal-publication" not in text:
         errors.append(f"{path}: all publication runs must share one concurrency group")
     job_text = jobs["publish"].text
-    if "release_publisher.py reserve" in job_text:
-        errors.append(
-            f"{path}: recovery must not create a release without the preflight reservation"
-        )
     if "--force-with-lease=" not in job_text:
         errors.append(f"{path}: source promotion must use an atomic force-with-lease")
     if "--method PATCH" in job_text and "personal/stable" in job_text:

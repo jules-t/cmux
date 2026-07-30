@@ -284,6 +284,24 @@ jobs:
             exit 1
           fi
 
+      - name: Ensure exact release reservation
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN }}
+          PYTHONPATH: ${{ github.workspace }}/control
+          BUILD_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ inputs.build_run_id }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "PERSONAL_FORK_TOKEN is required for release reservation" >&2
+            exit 1
+          fi
+          python3 control/personal/release_publisher.py ensure-reservation \
+            --repo "$GITHUB_REPOSITORY" \
+            --personal-tag "${{ steps.identity.outputs.personal_tag }}" \
+            --source-sha "${{ steps.identity.outputs.source_sha }}" \
+            --base-tag "${{ steps.identity.outputs.base_tag }}" \
+            --run-url "$BUILD_RUN_URL"
+
       - name: Observe personal/stable without moving it
         if: ${{ !inputs.promote_source }}
         id: observe_stable
