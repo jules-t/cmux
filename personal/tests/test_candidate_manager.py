@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import unittest
 
+from personal.common import ControlError
 from personal.candidate_manager import (
     create_bundle,
     make_baseline,
@@ -125,6 +126,41 @@ class CandidateManagerTests(unittest.TestCase):
         self.assertEqual(result["status"], "conflict")
         self.assertTrue(result["eligible_for_agent"])
         self.assertEqual(result["conflicted_paths"], ["feature.txt"])
+
+    def test_rejects_a_target_that_rewrites_the_recorded_upstream_base(self) -> None:
+        command(self.repo, "switch", "--orphan", "rewritten")
+        write(self.repo / "unrelated.txt", "rewritten history\n")
+        command(self.repo, "add", ".")
+        command(self.repo, "commit", "-m", "rewritten upstream")
+        with self.assertRaisesRegex(ControlError, "rewritten history"):
+            make_baseline(
+                self.repo,
+                source_ref="personal/stable",
+                current_base_ref="v1.0.0",
+                target_ref="rewritten",
+                candidate_branch="candidate/personal-v1.0.1",
+                policy=POLICY,
+            )
+
+    def test_a_rebase_failure_without_unmerged_paths_fails_closed(self) -> None:
+        baseline = make_baseline(
+            self.repo,
+            source_ref="personal/stable",
+            current_base_ref="v1.0.0",
+            target_ref="v1.0.1",
+            candidate_branch="candidate/personal-v1.0.1",
+            policy=POLICY,
+        )
+        hook = self.repo / ".git" / "hooks" / "pre-rebase"
+        hook.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        hook.chmod(0o755)
+        result = rebase_candidate(self.repo, baseline, POLICY, leave_conflicts=False)
+        self.assertEqual(result["status"], "conflict")
+        self.assertFalse(result["eligible_for_agent"])
+        self.assertIn(
+            "git reported a conflict without any unmerged paths",
+            result["reasons"],
+        )
 
 
 if __name__ == "__main__":

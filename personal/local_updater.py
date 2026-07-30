@@ -152,6 +152,7 @@ def inspect_bundle(
     expected_base_tag: str,
     expected_personal_tag: str,
     expected_upstream_repository: str,
+    expected_upstream_main_sha: str | None = None,
 ) -> None:
     plist_path = app / "Contents" / "Info.plist"
     if not plist_path.is_file():
@@ -172,6 +173,11 @@ def inspect_bundle(
             raise ControlError(
                 f"downloaded app has unexpected {key}: {plist.get(key)!r} (expected {expected!r})"
             )
+    if expected_upstream_main_sha:
+        if plist.get("CMUXPersonalUpstreamMainSHA") != expected_upstream_main_sha:
+            raise ControlError("downloaded app has an unexpected upstream main base")
+    elif "CMUXPersonalUpstreamMainSHA" in plist:
+        raise ControlError("stable downloaded app unexpectedly declares an upstream main base")
     raw_runtime_manifest = plist.get("CMUXRemoteDaemonManifestJSON")
     if not isinstance(raw_runtime_manifest, str):
         raise ControlError("downloaded app has no embedded remote runtime manifest")
@@ -185,6 +191,7 @@ def inspect_bundle(
         runtime_manifest,
         repository=expected_upstream_repository,
         base_tag=expected_base_tag,
+        channel="nightly" if expected_upstream_main_sha else "stable",
     )
     binary = app / "Contents" / "MacOS" / "cmux"
     cli = app / "Contents" / "Resources" / "bin" / "cmux"
@@ -389,6 +396,11 @@ def installation_status(
             expected_base_tag=base_tag,
             expected_personal_tag=expected_personal_tag,
             expected_upstream_repository=expected_upstream_repository,
+            expected_upstream_main_sha=(
+                str(state["upstream_main_sha"])
+                if state.get("upstream_main_sha")
+                else None
+            ),
         )
     except ControlError as exc:
         return (
@@ -508,6 +520,11 @@ def _main(resources: contextlib.ExitStack) -> int:
             expected_base_tag=str(manifest["base_tag"]),
             expected_personal_tag=tag,
             expected_upstream_repository=str(config["upstream_repository"]),
+            expected_upstream_main_sha=(
+                str(manifest["upstream_main_sha"])
+                if manifest.get("upstream_main_sha")
+                else None
+            ),
         )
         install_app(
             app,
@@ -517,17 +534,17 @@ def _main(resources: contextlib.ExitStack) -> int:
         )
 
     data_root.mkdir(parents=True, exist_ok=True)
-    write_json(
-        state_path,
-        {
-            "schema_version": 1,
-            "personal_tag": tag,
-            "source_sha": manifest["source_sha"],
-            "base_tag": manifest["base_tag"],
-            "installed_at": utc_now(),
-            "install_path": str(validate_install_destination(str(config["install_path"]))),
-        },
-    )
+    installed_state = {
+        "schema_version": 1,
+        "personal_tag": tag,
+        "source_sha": manifest["source_sha"],
+        "base_tag": manifest["base_tag"],
+        "installed_at": utc_now(),
+        "install_path": str(validate_install_destination(str(config["install_path"]))),
+    }
+    if manifest.get("upstream_main_sha"):
+        installed_state["upstream_main_sha"] = manifest["upstream_main_sha"]
+    write_json(state_path, installed_state)
     notify("cmux Personal updated", f"Installed {tag}. It will be used the next time you open it.")
     print(f"installed cmux Personal {tag}")
     return 0

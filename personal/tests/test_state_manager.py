@@ -233,6 +233,36 @@ class StateManagerTests(unittest.TestCase):
             "published_without_source_promotion",
         )
 
+    def test_main_promotion_records_the_exact_upstream_rebase_base(self) -> None:
+        state = initial_state()
+        claim(state)
+        finalize_publication(
+            state,
+            base_tag="v0.64.20",
+            personal_tag="personal-v0.64.20-r1",
+            source_sha=SOURCE_A,
+            personal_stable_sha=SOURCE_A,
+            run_id="123",
+            updated_at=NOW,
+            upstream_main_sha=SOURCE_B,
+        )
+        self.assertEqual(state["current_upstream_main_sha"], SOURCE_B)
+
+    def test_stable_promotion_clears_a_previous_main_rebase_base(self) -> None:
+        state = initial_state()
+        state["current_upstream_main_sha"] = SOURCE_C
+        claim(state)
+        finalize_publication(
+            state,
+            base_tag="v0.64.20",
+            personal_tag="personal-v0.64.20-r1",
+            source_sha=SOURCE_A,
+            personal_stable_sha=SOURCE_A,
+            run_id="123",
+            updated_at=NOW,
+        )
+        self.assertNotIn("current_upstream_main_sha", state)
+
     def test_exact_published_recovery_can_finalize_without_a_claim(self) -> None:
         state = published_state()
         finalize_publication(

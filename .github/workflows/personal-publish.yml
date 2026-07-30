@@ -172,6 +172,7 @@ jobs:
           source_sha="$(jq -er '.source_sha' "$manifest")"
           base_tag="$(jq -er '.base_tag' "$manifest")"
           personal_tag="$(jq -er '.personal_tag' "$manifest")"
+          upstream_main_sha="$(jq -er '.upstream_main_sha // ""' "$manifest")"
           repository="$(jq -er '.repository' "$manifest")"
           workflow="$(jq -er '.workflow' "$manifest")"
           workflow_run_id="$(jq -er '.workflow_run_id' "$manifest")"
@@ -180,6 +181,9 @@ jobs:
           [[ "$base_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           [[ "$personal_tag" =~ ^personal-v[0-9]+\.[0-9]+\.[0-9]+-r[1-9][0-9]*$ ]]
           [[ "$personal_tag" == "personal-${base_tag}-"* ]]
+          if [[ -n "$upstream_main_sha" ]]; then
+            [[ "$upstream_main_sha" =~ ^[0-9a-f]{40}$ ]]
+          fi
           [[ "$repository" == "$GITHUB_REPOSITORY" ]]
           [[ "$workflow_run_id" == "$BUILD_RUN_ID" ]]
           [[ "$workflow" == "$GITHUB_REPOSITORY/.github/workflows/personal-build.yml@refs/heads/personal-control" ]]
@@ -188,6 +192,7 @@ jobs:
             echo "source_sha=$source_sha"
             echo "base_tag=$base_tag"
             echo "personal_tag=$personal_tag"
+            echo "upstream_main_sha=$upstream_main_sha"
           } >> "$GITHUB_OUTPUT"
           {
             echo "### Verified publication candidate"
@@ -197,6 +202,9 @@ jobs:
             echo "- release: \`$personal_tag\`"
             echo "- app source: \`$source_sha\`"
             echo "- official base: \`$base_tag\`"
+            if [[ -n "$upstream_main_sha" ]]; then
+              echo "- upstream main base: \`$upstream_main_sha\`"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify release asset identity
@@ -208,7 +216,8 @@ jobs:
             --directory dist \
             --source-sha "${{ steps.identity.outputs.source_sha }}" \
             --base-tag "${{ steps.identity.outputs.base_tag }}" \
-            --personal-tag "${{ steps.identity.outputs.personal_tag }}"
+            --personal-tag "${{ steps.identity.outputs.personal_tag }}" \
+            --upstream-main-sha "${{ steps.identity.outputs.upstream_main_sha }}"
 
       - name: Verify build provenance
         env:
@@ -415,6 +424,7 @@ jobs:
               --personal-tag "${{ steps.identity.outputs.personal_tag }}" \
               --source-sha "${{ steps.identity.outputs.source_sha }}" \
               --personal-stable-sha "$PERSONAL_STABLE_SHA" \
+              --upstream-main-sha "${{ steps.identity.outputs.upstream_main_sha }}" \
               --run-id "${{ inputs.build_run_id }}"
             git -C state add personal/state.json
             if git -C state diff --cached --quiet; then

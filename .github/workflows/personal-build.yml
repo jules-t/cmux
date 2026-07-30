@@ -13,6 +13,16 @@ on:
         required: false
         default: ""
         type: string
+      expected_upstream_main_sha:
+        description: Exact verified upstream main base; blank selects stable runtime assets
+        required: false
+        default: ""
+        type: string
+      runtime_manifest_asset:
+        description: Immutable upstream nightly runtime manifest for main-based builds
+        required: false
+        default: ""
+        type: string
       promote_source:
         description: Move personal/stable to the tested source after a successful build
         required: true
@@ -59,6 +69,7 @@ jobs:
     outputs:
       source_sha: ${{ steps.metadata.outputs.source_sha }}
       base_tag: ${{ steps.metadata.outputs.base_tag }}
+      upstream_main_sha: ${{ steps.metadata.outputs.upstream_main_sha }}
       personal_tag: ${{ steps.naming.outputs.personal_tag }}
     steps:
       - name: Check out control plane
@@ -81,6 +92,8 @@ jobs:
         working-directory: source
         env:
           EXPECTED_BASE_TAG: ${{ inputs.expected_base_tag }}
+          EXPECTED_UPSTREAM_MAIN_SHA: ${{ inputs.expected_upstream_main_sha }}
+          RUNTIME_MANIFEST_ASSET: ${{ inputs.runtime_manifest_asset }}
         run: |
           set -euo pipefail
           source_sha="$(git rev-parse HEAD)"
@@ -92,12 +105,33 @@ jobs:
           git remote add upstream https://github.com/manaflow-ai/cmux.git
           git fetch --force upstream "refs/tags/${base_tag}:refs/tags/${base_tag}"
           git merge-base --is-ancestor "$base_tag" HEAD
-          if ! git diff --quiet "$base_tag" HEAD -- daemon/remote; then
-            echo "personal daemon changes cannot reuse official ${base_tag} runtime assets" >&2
-            exit 1
+          if [[ -n "$EXPECTED_UPSTREAM_MAIN_SHA" || -n "$RUNTIME_MANIFEST_ASSET" ]]; then
+            if [[ ! "$EXPECTED_UPSTREAM_MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "main-based builds require an exact upstream main SHA" >&2
+              exit 1
+            fi
+            if [[ ! "$RUNTIME_MANIFEST_ASSET" =~ ^cmuxd-remote-manifest-[1-9][0-9]+\.json$ ]]; then
+              echo "main-based builds require an immutable nightly runtime manifest" >&2
+              exit 1
+            fi
+            git fetch --force upstream "$EXPECTED_UPSTREAM_MAIN_SHA"
+            git merge-base --is-ancestor "$base_tag" "$EXPECTED_UPSTREAM_MAIN_SHA"
+            git merge-base --is-ancestor "$EXPECTED_UPSTREAM_MAIN_SHA" HEAD
+            if ! git diff --quiet "$EXPECTED_UPSTREAM_MAIN_SHA" HEAD -- daemon/remote; then
+              echo "personal daemon changes cannot reuse the verified upstream-main runtime assets" >&2
+              exit 1
+            fi
+          else
+            if ! git diff --quiet "$base_tag" HEAD -- daemon/remote; then
+              echo "personal daemon changes cannot reuse official ${base_tag} runtime assets" >&2
+              exit 1
+            fi
           fi
-          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
-          echo "base_tag=$base_tag" >> "$GITHUB_OUTPUT"
+          {
+            echo "source_sha=$source_sha"
+            echo "base_tag=$base_tag"
+            echo "upstream_main_sha=$EXPECTED_UPSTREAM_MAIN_SHA"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Allocate immutable release tag
         id: naming
@@ -113,27 +147,53 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BASE_TAG: ${{ steps.metadata.outputs.base_tag }}
+          UPSTREAM_MAIN_SHA: ${{ steps.metadata.outputs.upstream_main_sha }}
+          RUNTIME_MANIFEST_ASSET: ${{ inputs.runtime_manifest_asset }}
           UPSTREAM_REPOSITORY: manaflow-ai/cmux
           PYTHONPATH: ${{ github.workspace }}/control
         run: |
           set -euo pipefail
           runtime_dir="$RUNNER_TEMP/official-runtime"
           mkdir -p "$runtime_dir"
-          gh release download "$BASE_TAG" \
-            --repo "$UPSTREAM_REPOSITORY" \
-            --pattern cmuxd-remote-manifest.json \
-            --dir "$runtime_dir"
-          source_digest="$(git -C source rev-parse "${BASE_TAG}^{commit}")"
-          gh attestation verify "$runtime_dir/cmuxd-remote-manifest.json" \
-            --repo "$UPSTREAM_REPOSITORY" \
-            --signer-workflow "$UPSTREAM_REPOSITORY/.github/workflows/release.yml" \
-            --signer-digest "$source_digest" \
-            --source-ref "refs/tags/${BASE_TAG}" \
-            --source-digest "$source_digest"
-          python3 control/personal/official_runtime_manifest.py \
-            --manifest "$runtime_dir/cmuxd-remote-manifest.json" \
-            --repository "$UPSTREAM_REPOSITORY" \
-            --base-tag "$BASE_TAG"
+          if [[ -n "$UPSTREAM_MAIN_SHA" ]]; then
+            runtime_build="${RUNTIME_MANIFEST_ASSET#cmuxd-remote-manifest-}"
+            runtime_build="${runtime_build%.json}"
+            gh release download nightly \
+              --repo "$UPSTREAM_REPOSITORY" \
+              --pattern "$RUNTIME_MANIFEST_ASSET" \
+              --dir "$runtime_dir"
+            gh attestation verify "$runtime_dir/$RUNTIME_MANIFEST_ASSET" \
+              --repo "$UPSTREAM_REPOSITORY" \
+              --signer-workflow "$UPSTREAM_REPOSITORY/.github/workflows/nightly.yml" \
+              --signer-digest "$UPSTREAM_MAIN_SHA" \
+              --source-ref refs/heads/main \
+              --source-digest "$UPSTREAM_MAIN_SHA"
+            python3 control/personal/official_runtime_manifest.py \
+              --manifest "$runtime_dir/$RUNTIME_MANIFEST_ASSET" \
+              --repository "$UPSTREAM_REPOSITORY" \
+              --base-tag "$BASE_TAG" \
+              --channel nightly \
+              --runtime-build "$runtime_build"
+            cp "$runtime_dir/$RUNTIME_MANIFEST_ASSET" \
+              "$runtime_dir/cmuxd-remote-manifest.json"
+          else
+            gh release download "$BASE_TAG" \
+              --repo "$UPSTREAM_REPOSITORY" \
+              --pattern cmuxd-remote-manifest.json \
+              --dir "$runtime_dir"
+            source_digest="$(git -C source rev-parse "${BASE_TAG}^{commit}")"
+            gh attestation verify "$runtime_dir/cmuxd-remote-manifest.json" \
+              --repo "$UPSTREAM_REPOSITORY" \
+              --signer-workflow "$UPSTREAM_REPOSITORY/.github/workflows/release.yml" \
+              --signer-digest "$source_digest" \
+              --source-ref "refs/tags/${BASE_TAG}" \
+              --source-digest "$source_digest"
+            python3 control/personal/official_runtime_manifest.py \
+              --manifest "$runtime_dir/cmuxd-remote-manifest.json" \
+              --repository "$UPSTREAM_REPOSITORY" \
+              --base-tag "$BASE_TAG" \
+              --channel stable
+          fi
 
       - name: Upload verified official runtime manifest
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -266,7 +326,8 @@ jobs:
             "${{ needs.metadata.outputs.base_tag }}" \
             "${{ needs.metadata.outputs.personal_tag }}" \
             "$GITHUB_WORKSPACE/ghostty-helper/ghostty" \
-            "$GITHUB_WORKSPACE/official-runtime/cmuxd-remote-manifest.json"
+            "$GITHUB_WORKSPACE/official-runtime/cmuxd-remote-manifest.json" \
+            "${{ needs.metadata.outputs.upstream_main_sha }}"
 
       - name: Upload isolated build assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -307,7 +368,8 @@ jobs:
             --directory dist \
             --source-sha "${{ needs.metadata.outputs.source_sha }}" \
             --base-tag "${{ needs.metadata.outputs.base_tag }}" \
-            --personal-tag "${{ needs.metadata.outputs.personal_tag }}"
+            --personal-tag "${{ needs.metadata.outputs.personal_tag }}" \
+            --upstream-main-sha "${{ needs.metadata.outputs.upstream_main_sha }}"
 
       - name: Attest personal app archive
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3

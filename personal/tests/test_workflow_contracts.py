@@ -166,6 +166,45 @@ jobs:
         validate_publish_workflow(path, text, parse_jobs(path, text), errors)
         self.assertTrue(any("atomic force-with-lease" in error for error in errors))
 
+    def test_daily_main_workflow_dispatches_only_the_gated_publishing_build(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        text = (
+            repository / ".github" / "workflows" / "personal-main-canary.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn('cron: "41 3 * * *"', text)
+        self.assertEqual(text.count("cron:"), 1)
+        self.assertIn("-f expected_upstream_main_sha=\"$UPSTREAM_SHA\"", text)
+        self.assertIn("-f runtime_manifest_asset=\"$RUNTIME_MANIFEST_ASSET\"", text)
+        self.assertIn("-f promote_source=true", text)
+        self.assertIn("-f publish_release=true", text)
+        self.assertIn("gh attestation verify", text)
+        self.assertIn("review-cmux-resolution.txt", text)
+
+    def test_stable_update_rebases_from_a_recorded_main_base_when_present(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        text = (
+            repository / ".github" / "workflows" / "personal-update.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            ".current_upstream_main_sha // .current_stable_tag",
+            text,
+        )
+        self.assertIn('--current-base-ref "$CURRENT_SOURCE_BASE"', text)
+        self.assertNotIn('--current-base-ref "$CURRENT_TAG"', text)
+
+    def test_main_build_requires_exact_nightly_runtime_provenance(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        text = (
+            repository / ".github" / "workflows" / "personal-build.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("expected_upstream_main_sha:", text)
+        self.assertIn("runtime_manifest_asset:", text)
+        self.assertIn(
+            '--signer-workflow "$UPSTREAM_REPOSITORY/.github/workflows/nightly.yml"',
+            text,
+        )
+        self.assertIn('--source-digest "$UPSTREAM_MAIN_SHA"', text)
+
 
 if __name__ == "__main__":
     unittest.main()

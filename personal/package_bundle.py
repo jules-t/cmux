@@ -4,9 +4,13 @@ import argparse
 import json
 import pathlib
 import plistlib
+import re
 
 from personal.common import ControlError, load_json
 from personal.official_runtime_manifest import validate_official_runtime_manifest
+
+
+SOURCE_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 def patch_bundle_plist(
@@ -19,6 +23,7 @@ def patch_bundle_plist(
     base_tag: str,
     personal_tag: str,
     remote_daemon_manifest: dict,
+    upstream_main_sha: str | None = None,
 ) -> dict:
     plist["CFBundleName"] = app_name
     plist["CFBundleDisplayName"] = app_name
@@ -26,6 +31,12 @@ def patch_bundle_plist(
     plist["CMUXPersonalSourceSHA"] = source_sha
     plist["CMUXPersonalBaseTag"] = base_tag
     plist["CMUXPersonalReleaseTag"] = personal_tag
+    if upstream_main_sha:
+        if not SOURCE_SHA_RE.fullmatch(upstream_main_sha):
+            raise ControlError("upstream main SHA is not a full lowercase commit SHA")
+        plist["CMUXPersonalUpstreamMainSHA"] = upstream_main_sha
+    else:
+        plist.pop("CMUXPersonalUpstreamMainSHA", None)
     plist["CMUXRemoteDaemonManifestJSON"] = json.dumps(
         remote_daemon_manifest,
         separators=(",", ":"),
@@ -58,6 +69,7 @@ def main() -> int:
     parser.add_argument("--source-sha", required=True)
     parser.add_argument("--base-tag", required=True)
     parser.add_argument("--personal-tag", required=True)
+    parser.add_argument("--upstream-main-sha", default="")
     parser.add_argument("--remote-daemon-manifest", required=True)
     args = parser.parse_args()
 
@@ -73,6 +85,7 @@ def main() -> int:
         load_json(args.remote_daemon_manifest),
         repository=str(config["upstream_repository"]),
         base_tag=args.base_tag,
+        channel="nightly" if args.upstream_main_sha else "stable",
     )
     patched = patch_bundle_plist(
         plist,
@@ -83,6 +96,7 @@ def main() -> int:
         base_tag=args.base_tag,
         personal_tag=args.personal_tag,
         remote_daemon_manifest=remote_daemon_manifest,
+        upstream_main_sha=args.upstream_main_sha or None,
     )
     with path.open("wb") as handle:
         plistlib.dump(patched, handle, fmt=plistlib.FMT_BINARY, sort_keys=False)

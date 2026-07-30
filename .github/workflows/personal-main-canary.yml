@@ -1,61 +1,33 @@
-name: Observe upstream main and run personal canary
+name: Promote verified upstream main to cmux Personal
 
 on:
   schedule:
     - cron: "41 3 * * *"
-    - cron: "53 3 * * 0"
   workflow_dispatch:
-    inputs:
-      run_canary:
-        description: Rebase the personal commits onto main and dispatch a non-publishing build
-        required: true
-        default: true
-        type: boolean
 
 permissions:
+  attestations: read
   contents: read
 
 concurrency:
-  group: cmux-personal-main-mirror
+  group: cmux-personal-stable-lifecycle
   cancel-in-progress: false
 
 jobs:
-  mirror:
+  observe:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
+      attestations: read
       contents: read
     outputs:
-      upstream_sha: ${{ steps.sync.outputs.upstream_sha }}
+      ready: ${{ steps.observe.outputs.ready }}
+      upstream_sha: ${{ steps.observe.outputs.upstream_sha }}
+      current_base_sha: ${{ steps.observe.outputs.current_base_sha }}
+      base_tag: ${{ steps.observe.outputs.base_tag }}
+      runtime_manifest_asset: ${{ steps.observe.outputs.runtime_manifest_asset }}
     steps:
-      - name: Observe official main exactly
-        id: sync
-        run: |
-          set -euo pipefail
-          upstream_sha="$(git ls-remote https://github.com/manaflow-ai/cmux.git refs/heads/main | awk '{print $1}')"
-          if [[ ! "$upstream_sha" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "could not resolve the exact upstream main commit" >&2
-            exit 1
-          fi
-          echo "upstream_sha=$upstream_sha" >> "$GITHUB_OUTPUT"
-          {
-            echo "### upstream main observation"
-            echo ""
-            echo "- upstream: \`$upstream_sha\`"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  canary:
-    if: ${{ github.event.schedule == '53 3 * * 0' || (github.event_name == 'workflow_dispatch' && inputs.run_canary) }}
-    needs: mirror
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    outputs:
-      status: ${{ steps.prepare.outputs.status }}
-      candidate_commit: ${{ steps.prepare.outputs.candidate_commit }}
-    steps:
-      - name: Check out control plane
+      - name: Check out trusted control plane
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.sha }}
@@ -77,149 +49,460 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Prepare main canary
-        id: prepare
+      - name: Select a fully published upstream main revision
+        id: observe
         env:
+          GH_TOKEN: ${{ github.token }}
           PYTHONPATH: ${{ github.workspace }}/control
-          UPSTREAM_SHA: ${{ needs.mirror.outputs.upstream_sha }}
+          UPSTREAM_REPOSITORY: manaflow-ai/cmux
         run: |
           set -euo pipefail
-          current_tag="$(python3 -c 'import json; print(json.load(open("state/personal/state.json"))["current_stable_tag"])')"
+          git -C source remote add upstream "https://github.com/${UPSTREAM_REPOSITORY}.git"
+          git -C source fetch --force upstream \
+            '+refs/heads/main:refs/remotes/upstream/main' \
+            '+refs/tags/nightly:refs/tags/upstream-nightly' \
+            '+refs/tags/v*:refs/tags/v*'
+
+          main_sha="$(git -C source rev-parse 'refs/remotes/upstream/main^{commit}')"
+          upstream_sha="$(git -C source rev-parse 'refs/tags/upstream-nightly^{commit}')"
+          if [[ ! "$main_sha" =~ ^[0-9a-f]{40}$ || ! "$upstream_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "could not resolve exact upstream main and nightly commits" >&2
+            exit 1
+          fi
+          git -C source merge-base --is-ancestor "$upstream_sha" "$main_sha"
+
+          base_tag="$(git -C source describe --tags --match 'v[0-9]*' --abbrev=0 "$upstream_sha")"
+          if [[ ! "$base_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "upstream nightly has no official stable ancestry" >&2
+            exit 1
+          fi
+
+          current_base_ref="$(
+            jq -er '.current_upstream_main_sha // .current_stable_tag' \
+              state/personal/state.json
+          )"
+          current_base_sha="$(git -C source rev-parse "${current_base_ref}^{commit}")"
+          if [[ ! "$current_base_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "persisted personal source base is invalid" >&2
+            exit 1
+          fi
+          git -C source merge-base --is-ancestor "$current_base_sha" HEAD
+          git -C source merge-base --is-ancestor "$current_base_sha" "$upstream_sha"
+
+          runtime_dir="$RUNNER_TEMP/upstream-runtime"
+          mkdir -p "$runtime_dir"
+          gh release download nightly \
+            --repo "$UPSTREAM_REPOSITORY" \
+            --pattern cmuxd-remote-manifest.json \
+            --dir "$runtime_dir"
+          runtime_build="$(
+            python3 control/personal/official_runtime_manifest.py \
+              --manifest "$runtime_dir/cmuxd-remote-manifest.json" \
+              --repository "$UPSTREAM_REPOSITORY" \
+              --base-tag "$base_tag" \
+              --channel nightly \
+              --print-runtime-build
+          )"
+          runtime_manifest_asset="cmuxd-remote-manifest-${runtime_build}.json"
+          gh release download nightly \
+            --repo "$UPSTREAM_REPOSITORY" \
+            --pattern "$runtime_manifest_asset" \
+            --dir "$runtime_dir"
+          cmp "$runtime_dir/cmuxd-remote-manifest.json" \
+            "$runtime_dir/$runtime_manifest_asset"
+          gh attestation verify "$runtime_dir/$runtime_manifest_asset" \
+            --repo "$UPSTREAM_REPOSITORY" \
+            --signer-workflow "$UPSTREAM_REPOSITORY/.github/workflows/nightly.yml" \
+            --signer-digest "$upstream_sha" \
+            --source-ref refs/heads/main \
+            --source-digest "$upstream_sha"
+          python3 control/personal/official_runtime_manifest.py \
+            --manifest "$runtime_dir/$runtime_manifest_asset" \
+            --repository "$UPSTREAM_REPOSITORY" \
+            --base-tag "$base_tag" \
+            --channel nightly \
+            --runtime-build "$runtime_build"
+
+          observed_again="$(
+            git ls-remote "https://github.com/${UPSTREAM_REPOSITORY}.git" \
+              refs/tags/nightly |
+              awk 'NR == 1 { print $1 }'
+          )"
+          if [[ "$observed_again" != "$upstream_sha" ]]; then
+            echo "upstream nightly moved while its runtime provenance was being verified" >&2
+            exit 1
+          fi
+
+          ready=true
+          if [[ "$current_base_sha" == "$upstream_sha" ]]; then
+            ready=false
+          fi
+          {
+            echo "ready=$ready"
+            echo "upstream_sha=$upstream_sha"
+            echo "current_base_sha=$current_base_sha"
+            echo "base_tag=$base_tag"
+            echo "runtime_manifest_asset=$runtime_manifest_asset"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### Daily upstream main observation"
+            echo ""
+            echo "- latest main: \`$main_sha\`"
+            echo "- fully published main: \`$upstream_sha\`"
+            echo "- current personal base: \`$current_base_sha\`"
+            echo "- official version base: \`$base_tag\`"
+            echo "- immutable runtime: \`$runtime_manifest_asset\`"
+            echo "- update required: \`$ready\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  prepare:
+    if: ${{ needs.observe.outputs.ready == 'true' }}
+    needs: observe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      status: ${{ steps.prepare.outputs.status }}
+      eligible_for_agent: ${{ steps.prepare.outputs.eligible_for_agent }}
+      candidate_commit: ${{ steps.prepare.outputs.candidate_commit }}
+      candidate_branch: ${{ steps.prepare.outputs.candidate_branch }}
+      agent_available: ${{ steps.agent.outputs.available }}
+    steps:
+      - name: Check out trusted control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+
+      - name: Check out current personal source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: personal/stable
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare main candidate
+        id: prepare
+        env:
+          CURRENT_BASE_SHA: ${{ needs.observe.outputs.current_base_sha }}
+          PYTHONPATH: ${{ github.workspace }}/control
+          UPSTREAM_SHA: ${{ needs.observe.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
           git -C source remote add upstream https://github.com/manaflow-ai/cmux.git
           git -C source fetch --force upstream \
-            main \
-            "refs/tags/${current_tag}:refs/tags/${current_tag}"
+            '+refs/heads/main:refs/remotes/upstream/main' \
+            '+refs/tags/v*:refs/tags/v*'
+          git -C source cat-file -e "${CURRENT_BASE_SHA}^{commit}"
+          git -C source cat-file -e "${UPSTREAM_SHA}^{commit}"
+          branch="candidate/main-${UPSTREAM_SHA:0:12}"
           python3 control/personal/candidate_manager.py prepare \
             --repo source \
             --source-ref HEAD \
-            --current-base-ref "$current_tag" \
+            --current-base-ref "$CURRENT_BASE_SHA" \
             --target-ref "$UPSTREAM_SHA" \
-            --candidate-branch canary/main \
+            --candidate-branch "$branch" \
             --policy control/personal/conflict-policy.json \
-            --baseline "$RUNNER_TEMP/canary-baseline.json" \
-            --output "$RUNNER_TEMP/canary-result.json" \
-            --bundle "$RUNNER_TEMP/canary.bundle"
+            --baseline "$RUNNER_TEMP/baseline.json" \
+            --output "$RUNNER_TEMP/conflict-result.json" \
+            --bundle "$RUNNER_TEMP/candidate-clean.bundle"
 
-      - name: Upload canary diagnostics
+      - name: Detect configured conflict agent
+        id: agent
+        env:
+          OPENAI_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [[ -n "$OPENAI_KEY" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload candidate context
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: main-canary-diagnostics
+          name: main-candidate-context
           path: |
-            ${{ runner.temp }}/canary-baseline.json
-            ${{ runner.temp }}/canary-result.json
+            ${{ runner.temp }}/baseline.json
+            ${{ runner.temp }}/conflict-result.json
           if-no-files-found: error
           retention-days: 1
 
-      - name: Upload clean canary bundle
+      - name: Upload clean candidate
         if: ${{ steps.prepare.outputs.status == 'clean' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: main-canary-bundle
-          path: ${{ runner.temp }}/canary.bundle
+          name: main-candidate-clean
+          path: ${{ runner.temp }}/candidate-clean.bundle
           if-no-files-found: error
           retention-days: 1
 
-  dispatch_canary_build:
-    if: ${{ needs.canary.outputs.status == 'clean' }}
-    needs: [mirror, canary]
+  resolve:
+    if: ${{ needs.prepare.outputs.status == 'conflict' && needs.prepare.outputs.eligible_for_agent == 'true' && needs.prepare.outputs.agent_available == 'true' }}
+    needs: [observe, prepare]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
+      candidate_commit: ${{ steps.verify.outputs.candidate_commit }}
+    steps:
+      - name: Check out control plane without write credentials
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+
+      - name: Check out current personal source without write credentials
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: personal/stable
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download original conflict context
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: main-candidate-context
+          path: context
+
+      - name: Reproduce the conflict
+        env:
+          CANDIDATE_BRANCH: ${{ needs.prepare.outputs.candidate_branch }}
+          CURRENT_BASE_SHA: ${{ needs.observe.outputs.current_base_sha }}
+          PYTHONPATH: ${{ github.workspace }}/control
+          UPSTREAM_SHA: ${{ needs.observe.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          git -C source remote add upstream https://github.com/manaflow-ai/cmux.git
+          git -C source fetch --force upstream \
+            '+refs/heads/main:refs/remotes/upstream/main' \
+            '+refs/tags/v*:refs/tags/v*'
+          python3 control/personal/candidate_manager.py prepare \
+            --repo source \
+            --source-ref HEAD \
+            --current-base-ref "$CURRENT_BASE_SHA" \
+            --target-ref "$UPSTREAM_SHA" \
+            --candidate-branch "$CANDIDATE_BRANCH" \
+            --policy control/personal/conflict-policy.json \
+            --baseline "$RUNNER_TEMP/resolver-baseline.json" \
+            --output "$RUNNER_TEMP/resolver-conflict.json" \
+            --leave-conflicts
+          cp "$RUNNER_TEMP/resolver-baseline.json" source/personal-conflict-baseline.json
+          cp "$RUNNER_TEMP/resolver-conflict.json" source/personal-conflict-result.json
+          cp control/personal/conflict-policy.json source/personal-conflict-policy.json
+
+      - name: Resolve compatible conflicts with Codex
+        id: resolver
+        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          safety-strategy: drop-sudo
+          working-directory: ${{ github.workspace }}/source
+          prompt-file: ${{ github.workspace }}/control/.github/codex/prompts/resolve-cmux-conflicts.txt
+          output-file: ${{ runner.temp }}/resolver-output.json
+          output-schema-file: ${{ github.workspace }}/control/personal/resolver-output.schema.json
+          effort: high
+          allow-bots: true
+          allow-bot-users: github-actions
+
+      - name: Verify resolved candidate deterministically
+        id: verify
+        env:
+          PYTHONPATH: ${{ github.workspace }}/control
+        run: |
+          set -euo pipefail
+          python3 -c 'import json,sys; value=json.load(open(sys.argv[1])); assert value["decision"] == "resolved", value' "$RUNNER_TEMP/resolver-output.json"
+          python3 control/personal/candidate_manager.py verify \
+            --repo source \
+            --policy control/personal/conflict-policy.json \
+            --baseline "$RUNNER_TEMP/resolver-baseline.json" \
+            --output "$RUNNER_TEMP/verification.json" \
+            --bundle "$RUNNER_TEMP/candidate-resolved.bundle"
+
+      - name: Upload resolved candidate for independent review
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: main-candidate-resolved
+          path: |
+            ${{ runner.temp }}/candidate-resolved.bundle
+            ${{ runner.temp }}/resolver-output.json
+            ${{ runner.temp }}/resolver-baseline.json
+            ${{ runner.temp }}/resolver-conflict.json
+          if-no-files-found: error
+          retention-days: 1
+
+  review:
+    if: ${{ needs.resolve.result == 'success' }}
+    needs: [observe, prepare, resolve]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      approved: ${{ steps.gate.outputs.approved }}
+    steps:
+      - name: Check out trusted control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+
+      - name: Download resolved candidate
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: main-candidate-resolved
+          path: review-context
+
+      - name: Arrange review context
+        env:
+          PYTHONPATH: ${{ github.workspace }}/control
+        run: |
+          set -euo pipefail
+          cp review-context/resolver-baseline.json review-context/baseline.json
+          cp review-context/resolver-conflict.json review-context/conflict-result.json
+          cp control/personal/conflict-policy.json review-context/conflict-policy.json
+          python3 control/personal/candidate_manager.py clone-bundle \
+            --bundle review-context/candidate-resolved.bundle \
+            --destination candidate \
+            --expected-commit "${{ needs.resolve.outputs.candidate_commit }}"
+
+      - name: Independently review the resolution
+        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":read-only"
+          safety-strategy: drop-sudo
+          working-directory: ${{ github.workspace }}/candidate
+          prompt-file: ${{ github.workspace }}/control/.github/codex/prompts/review-cmux-resolution.txt
+          output-file: ${{ runner.temp }}/reviewer-output.json
+          output-schema-file: ${{ github.workspace }}/control/personal/reviewer-output.schema.json
+          effort: high
+          allow-bots: true
+          allow-bot-users: github-actions
+
+      - name: Apply fail-closed review gate
+        id: gate
+        env:
+          PYTHONPATH: ${{ github.workspace }}/control
+        run: |
+          python3 control/personal/conflict_policy.py review-gate \
+            --resolver review-context/resolver-output.json \
+            --reviewer "$RUNNER_TEMP/reviewer-output.json" \
+            --output "$RUNNER_TEMP/review-gate.json"
+
+  dispatch:
+    if: ${{ always() && needs.observe.result == 'success' && needs.observe.outputs.ready == 'true' && needs.prepare.result == 'success' && (needs.prepare.outputs.status == 'clean' || (needs.resolve.result == 'success' && needs.review.outputs.approved == 'true')) }}
+    needs: [observe, prepare, resolve, review]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       actions: read
       contents: read
     steps:
-      - name: Check out control plane
+      - name: Check out trusted control plane
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.sha }}
           path: control
           persist-credentials: false
 
-      - name: Download canary bundle
+      - name: Download clean candidate
+        if: ${{ needs.prepare.outputs.status == 'clean' }}
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: main-canary-bundle
+          name: main-candidate-clean
           path: candidate-artifact
 
-      - name: Publish replaceable canary ref and dispatch build
+      - name: Download reviewed candidate
+        if: ${{ needs.prepare.outputs.status == 'conflict' }}
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: main-candidate-resolved
+          path: candidate-artifact
+
+      - name: Publish candidate ref and dispatch gated build
         env:
+          BASE_TAG: ${{ needs.observe.outputs.base_tag }}
+          CANDIDATE_BRANCH: ${{ needs.prepare.outputs.candidate_branch }}
+          CLEAN_COMMIT: ${{ needs.prepare.outputs.candidate_commit }}
           GH_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN }}
           PYTHONPATH: ${{ github.workspace }}/control
-          CANDIDATE_SHA: ${{ needs.canary.outputs.candidate_commit }}
+          RESOLVED_COMMIT: ${{ needs.resolve.outputs.candidate_commit }}
+          RUNTIME_MANIFEST_ASSET: ${{ needs.observe.outputs.runtime_manifest_asset }}
+          UPSTREAM_SHA: ${{ needs.observe.outputs.upstream_sha }}
         run: |
           set -euo pipefail
           if [[ -z "${GH_TOKEN:-}" ]]; then
-            echo "PERSONAL_FORK_TOKEN is required for canary publication" >&2
+            echo "PERSONAL_FORK_TOKEN is required for candidate publication" >&2
             exit 1
           fi
+          bundle="candidate-artifact/candidate-clean.bundle"
+          candidate_sha="$CLEAN_COMMIT"
+          if [[ "${{ needs.prepare.outputs.status }}" == "conflict" ]]; then
+            bundle="candidate-artifact/candidate-resolved.bundle"
+            candidate_sha="$RESOLVED_COMMIT"
+          fi
           python3 control/personal/candidate_manager.py clone-bundle \
-            --bundle candidate-artifact/canary.bundle \
+            --bundle "$bundle" \
             --destination candidate \
-            --expected-commit "$CANDIDATE_SHA"
+            --expected-commit "$candidate_sha"
           python3 control/personal/candidate_manager.py publish \
             --repo candidate \
             --remote-url "https://github.com/${GITHUB_REPOSITORY}.git" \
-            --candidate-branch canary/main \
-            --expected-commit "$CANDIDATE_SHA" \
+            --candidate-branch "$CANDIDATE_BRANCH" \
+            --expected-commit "$candidate_sha" \
             --github-auth
           gh workflow run personal-build.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref personal-control \
-            -f source_ref=canary/main \
-            -f promote_source=false \
-            -f publish_release=false
+            -f source_ref="$candidate_sha" \
+            -f expected_base_tag="$BASE_TAG" \
+            -f expected_upstream_main_sha="$UPSTREAM_SHA" \
+            -f runtime_manifest_asset="$RUNTIME_MANIFEST_ASSET" \
+            -f promote_source=true \
+            -f publish_release=true
+          {
+            echo "### Daily main candidate dispatched"
+            echo ""
+            echo "- upstream base: \`$UPSTREAM_SHA\`"
+            echo "- personal source: \`$candidate_sha\`"
+            echo "- runtime manifest: \`$RUNTIME_MANIFEST_ASSET\`"
+            echo "- build policy: test, verify, attest, publish, then promote"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-  report-canary-conflict:
-    if: ${{ always() && needs.canary.result == 'success' && needs.canary.outputs.status == 'conflict' }}
-    needs: canary
+  report-blocked:
+    if: ${{ always() && (needs.observe.result == 'failure' || (needs.observe.outputs.ready == 'true' && needs.dispatch.result != 'success')) }}
+    needs: [observe, prepare, resolve, review, dispatch]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       issues: write
     steps:
-      - name: Check out control plane
+      - name: Check out trusted control plane
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.sha }}
           path: control
           persist-credentials: false
 
-      - name: Report main canary conflict
+      - name: Report blocked daily main update
         env:
           GH_TOKEN: ${{ github.token }}
           PYTHONPATH: ${{ github.workspace }}/control
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          UPSTREAM_SHA: ${{ needs.observe.outputs.upstream_sha }}
         run: |
           python3 control/personal/report_issue.py \
             --repo "$GITHUB_REPOSITORY" \
             --assignee "$GITHUB_REPOSITORY_OWNER" \
-            --title "cmux Personal main canary has conflicts" \
-            --body "The weekly canary found conflicts against upstream main. This is an early warning only: personal/stable and the installed app were not changed. Review: ${RUN_URL}"
-
-  report-main-failure:
-    if: ${{ always() && (needs.mirror.result == 'failure' || needs.canary.result == 'failure' || needs.dispatch_canary_build.result == 'failure') }}
-    needs: [mirror, canary, dispatch_canary_build]
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      issues: write
-    steps:
-      - name: Check out control plane
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ github.sha }}
-          path: control
-          persist-credentials: false
-
-      - name: Report mirror or canary failure
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PYTHONPATH: ${{ github.workspace }}/control
-          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          python3 control/personal/report_issue.py \
-            --repo "$GITHUB_REPOSITORY" \
-            --assignee "$GITHUB_REPOSITORY_OWNER" \
-            --title "cmux Personal main monitoring requires attention" \
-            --body "The upstream-main observation or weekly canary failed. This did not change personal/stable or the installed app. Review: ${RUN_URL}"
+            --title "cmux Personal daily main update requires attention" \
+            --body "The daily upstream-main integration stopped before a verified build was dispatched (target: ${UPSTREAM_SHA:-unknown}). personal/stable, the published release, and the installed app were left unchanged. Review: ${RUN_URL}"

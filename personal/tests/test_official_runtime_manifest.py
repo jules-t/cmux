@@ -4,7 +4,10 @@ import copy
 import unittest
 
 from personal.common import ControlError
-from personal.official_runtime_manifest import validate_official_runtime_manifest
+from personal.official_runtime_manifest import (
+    nightly_runtime_build,
+    validate_official_runtime_manifest,
+)
 
 
 def manifest_fixture() -> dict:
@@ -34,6 +37,36 @@ def manifest_fixture() -> dict:
         "releaseURL": root,
         "checksumsAssetName": "cmuxd-remote-checksums.txt",
         "checksumsURL": f"{root}/cmuxd-remote-checksums.txt",
+        "entries": entries,
+    }
+
+
+def nightly_manifest_fixture(runtime_build: str = "3053117246701") -> dict:
+    root = "https://github.com/manaflow-ai/cmux/releases/download/nightly"
+    entries = []
+    for go_os, go_arch in (
+        ("darwin", "arm64"),
+        ("darwin", "amd64"),
+        ("linux", "arm64"),
+        ("linux", "amd64"),
+    ):
+        asset = f"cmuxd-remote-{go_os}-{go_arch}-{runtime_build}"
+        entries.append(
+            {
+                "goOS": go_os,
+                "goArch": go_arch,
+                "assetName": asset,
+                "downloadURL": f"{root}/{asset}",
+                "sha256": "b" * 64,
+            }
+        )
+    return {
+        "schemaVersion": 1,
+        "appVersion": f"0.64.20-nightly.{runtime_build}",
+        "releaseTag": "nightly",
+        "releaseURL": root,
+        "checksumsAssetName": f"cmuxd-remote-checksums-{runtime_build}.txt",
+        "checksumsURL": f"{root}/cmuxd-remote-checksums-{runtime_build}.txt",
         "entries": entries,
     }
 
@@ -70,6 +103,39 @@ class OfficialRuntimeManifestTests(unittest.TestCase):
                 value,
                 repository="manaflow-ai/cmux",
                 base_tag="v0.64.20",
+            )
+
+    def test_accepts_immutable_nightly_runtime_shape(self) -> None:
+        value = nightly_manifest_fixture()
+        self.assertEqual(
+            nightly_runtime_build(
+                value,
+                repository="manaflow-ai/cmux",
+                base_tag="v0.64.20",
+            ),
+            "3053117246701",
+        )
+        self.assertIs(
+            validate_official_runtime_manifest(
+                value,
+                repository="manaflow-ai/cmux",
+                base_tag="v0.64.20",
+                channel="nightly",
+                runtime_build="3053117246701",
+            ),
+            value,
+        )
+
+    def test_rejects_nightly_asset_from_another_build(self) -> None:
+        value = nightly_manifest_fixture()
+        value["entries"][0]["assetName"] = "cmuxd-remote-darwin-arm64-999"
+        with self.assertRaises(ControlError):
+            validate_official_runtime_manifest(
+                value,
+                repository="manaflow-ai/cmux",
+                base_tag="v0.64.20",
+                channel="nightly",
+                runtime_build="3053117246701",
             )
 
 

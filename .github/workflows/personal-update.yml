@@ -28,6 +28,7 @@ jobs:
       ready: ${{ steps.observe.outputs.ready }}
       target_tag: ${{ steps.observe.outputs.target_tag }}
       current_tag: ${{ steps.observe.outputs.current_tag }}
+      current_source_base: ${{ steps.observe.outputs.current_source_base }}
     steps:
       - name: Check out trusted control plane
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -58,6 +59,16 @@ jobs:
             --state state/personal/state.json \
             --output "$RUNNER_TEMP/release-observation.json" \
             "${args[@]}"
+          current_source_base="$(
+            jq -er '.current_upstream_main_sha // .current_stable_tag' \
+              state/personal/state.json
+          )"
+          if [[ ! "$current_source_base" =~ ^[0-9a-f]{40}$ &&
+                ! "$current_source_base" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "persisted personal source base is invalid" >&2
+            exit 1
+          fi
+          echo "current_source_base=$current_source_base" >> "$GITHUB_OUTPUT"
 
       - name: Persist observation
         run: |
@@ -116,14 +127,14 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}/control
           TARGET_TAG: ${{ needs.monitor.outputs.target_tag }}
-          CURRENT_TAG: ${{ needs.monitor.outputs.current_tag }}
+          CURRENT_SOURCE_BASE: ${{ needs.monitor.outputs.current_source_base }}
         run: |
           set -euo pipefail
           branch="candidate/personal-${TARGET_TAG#v}"
           python3 control/personal/candidate_manager.py prepare \
             --repo source \
             --source-ref HEAD \
-            --current-base-ref "$CURRENT_TAG" \
+            --current-base-ref "$CURRENT_SOURCE_BASE" \
             --target-ref "$TARGET_TAG" \
             --candidate-branch "$branch" \
             --policy control/personal/conflict-policy.json \
@@ -198,6 +209,7 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/control
           TARGET_TAG: ${{ needs.monitor.outputs.target_tag }}
           CURRENT_TAG: ${{ needs.monitor.outputs.current_tag }}
+          CURRENT_SOURCE_BASE: ${{ needs.monitor.outputs.current_source_base }}
         run: |
           set -euo pipefail
           git -C source remote add upstream https://github.com/manaflow-ai/cmux.git
@@ -207,7 +219,7 @@ jobs:
           python3 control/personal/candidate_manager.py prepare \
             --repo source \
             --source-ref HEAD \
-            --current-base-ref "$CURRENT_TAG" \
+            --current-base-ref "$CURRENT_SOURCE_BASE" \
             --target-ref "$TARGET_TAG" \
             --candidate-branch "${{ needs.prepare.outputs.candidate_branch }}" \
             --policy control/personal/conflict-policy.json \

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 9 ]]; then
-  echo "usage: $0 <source-root> <control-root> <dist-root> <derived-data> <source-sha> <base-tag> <personal-tag> <ghostty-helper> <remote-daemon-manifest>" >&2
+if [[ $# -ne 10 ]]; then
+  echo "usage: $0 <source-root> <control-root> <dist-root> <derived-data> <source-sha> <base-tag> <personal-tag> <ghostty-helper> <remote-daemon-manifest> <upstream-main-sha>" >&2
   exit 2
 fi
 
@@ -16,6 +16,7 @@ BASE_TAG="$6"
 PERSONAL_TAG="$7"
 GHOSTTY_HELPER_SOURCE="$(cd "$(dirname "$8")" && pwd)/$(basename "$8")"
 REMOTE_DAEMON_MANIFEST="$(cd "$(dirname "$9")" && pwd)/$(basename "$9")"
+UPSTREAM_MAIN_SHA="${10}"
 CONFIG="$CONTROL_ROOT/personal/config.json"
 export PYTHONPATH="$CONTROL_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
@@ -150,6 +151,7 @@ python3 "$CONTROL_ROOT/personal/package_bundle.py" \
   --source-sha "$SOURCE_SHA" \
   --base-tag "$BASE_TAG" \
   --personal-tag "$PERSONAL_TAG" \
+  --upstream-main-sha "$UPSTREAM_MAIN_SHA" \
   --remote-daemon-manifest "$REMOTE_DAEMON_MANIFEST"
 
 GHOSTTY_HELPER="$PERSONAL_APP/Contents/Resources/bin/ghostty"
@@ -209,6 +211,7 @@ python3 "$CONTROL_ROOT/personal/build_manifest.py" \
   --source-sha "$SOURCE_SHA" \
   --base-tag "$BASE_TAG" \
   --personal-tag "$PERSONAL_TAG" \
+  --upstream-main-sha "$UPSTREAM_MAIN_SHA" \
   --output "$DIST_ROOT/$MANIFEST_NAME" \
   --checksum-output "$DIST_ROOT/$ARCHIVE_NAME.sha256"
 

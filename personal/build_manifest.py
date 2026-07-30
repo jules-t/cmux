@@ -6,8 +6,12 @@ import json
 import os
 import pathlib
 import platform
+import re
 
 from personal.common import ControlError, load_json, utc_now, write_json
+
+
+SOURCE_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 def sha256(path: pathlib.Path) -> str:
@@ -25,6 +29,7 @@ def main() -> int:
     parser.add_argument("--source-sha", required=True)
     parser.add_argument("--base-tag", required=True)
     parser.add_argument("--personal-tag", required=True)
+    parser.add_argument("--upstream-main-sha", default="")
     parser.add_argument("--output", required=True)
     parser.add_argument("--checksum-output", required=True)
     args = parser.parse_args()
@@ -34,6 +39,8 @@ def main() -> int:
     if not archive.is_file():
         raise ControlError(f"archive not found: {archive}")
     digest = sha256(archive)
+    if args.upstream_main_sha and not SOURCE_SHA_RE.fullmatch(args.upstream_main_sha):
+        raise ControlError("upstream main SHA is not a full lowercase commit SHA")
     manifest = {
         "schema_version": 1,
         "repository": config["fork_repository"],
@@ -53,6 +60,8 @@ def main() -> int:
         "built_at": utc_now(),
         "builder_os": platform.platform(),
     }
+    if args.upstream_main_sha:
+        manifest["upstream_main_sha"] = args.upstream_main_sha
     write_json(args.output, manifest)
     checksum = pathlib.Path(args.checksum_output)
     checksum.write_text(f"{digest}  {archive.name}\n", encoding="utf-8")

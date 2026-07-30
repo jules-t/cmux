@@ -57,6 +57,19 @@ def make_baseline(
         raise ControlError(
             f"{current_base_ref} is not an ancestor of {source_ref}; refusing an ambiguous rebase"
         )
+    target_ancestor = git(
+        repo,
+        "merge-base",
+        "--is-ancestor",
+        current_base_commit,
+        target_commit,
+        check=False,
+    )
+    if target_ancestor.returncode != 0:
+        raise ControlError(
+            f"{target_ref} does not descend from {current_base_ref}; "
+            "refusing to replay personal commits across rewritten history"
+        )
     commit_lines = list_lines(
         git_output(
             repo,
@@ -166,7 +179,7 @@ def rebase_candidate(
         }
     )
     if not leave_conflicts:
-        git(repo, "rebase", "--abort")
+        git(repo, "rebase", "--abort", check=False)
     return classification
 
 

@@ -50,6 +50,21 @@ class PackageBundleTests(unittest.TestCase):
         )
         self.assertIn("v0.64.20", patched["CMUXRemoteDaemonManifestJSON"])
 
+    def test_records_the_exact_upstream_main_base_when_present(self) -> None:
+        upstream_sha = "a" * 40
+        patched = patch_bundle_plist(
+            {},
+            app_name="cmux Personal",
+            bundle_identifier="com.cmuxterm.app.staging.personal",
+            auth_callback_scheme="cmux-personal",
+            source_sha="b" * 40,
+            base_tag="v0.64.20",
+            personal_tag="personal-v0.64.20-r4",
+            remote_daemon_manifest=manifest_fixture(),
+            upstream_main_sha=upstream_sha,
+        )
+        self.assertEqual(patched["CMUXPersonalUpstreamMainSHA"], upstream_sha)
+
 
 if __name__ == "__main__":
     unittest.main()

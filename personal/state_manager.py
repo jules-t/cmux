@@ -220,6 +220,7 @@ def finalize_publication(
     personal_stable_sha: str,
     run_id: str | None,
     updated_at: str,
+    upstream_main_sha: str | None = None,
 ) -> None:
     run_id = require_run_id(run_id, context="publication workflow run ID")
     validate_promotion(
@@ -232,6 +233,11 @@ def finalize_publication(
         personal_stable_sha,
         context="observed personal/stable SHA",
     )
+    if upstream_main_sha:
+        upstream_main_sha = require_source_sha(
+            upstream_main_sha,
+            context="promoted upstream main SHA",
+        )
     claim = claimed_identity(state)
     published = published_identity(state)
     if (
@@ -270,6 +276,7 @@ def finalize_publication(
             source_sha=source_sha,
         )
         and state.get("personal_stable_sha") == personal_stable_sha
+        and state.get("current_upstream_main_sha") == upstream_main_sha
     ):
         return
 
@@ -281,6 +288,10 @@ def finalize_publication(
     source_is_current = personal_stable_sha == source_sha
     if source_is_current:
         state["current_stable_tag"] = base_tag
+        if upstream_main_sha:
+            state["current_upstream_main_sha"] = upstream_main_sha
+        else:
+            state.pop("current_upstream_main_sha", None)
         state["pending_observation"] = {
             "tag": None,
             "count": 0,
@@ -324,6 +335,7 @@ def main() -> int:
     finalize.add_argument("--personal-tag", required=True)
     finalize.add_argument("--source-sha", required=True)
     finalize.add_argument("--personal-stable-sha", required=True)
+    finalize.add_argument("--upstream-main-sha", default="")
     finalize.add_argument("--run-id", required=True)
 
     args = parser.parse_args()
@@ -364,6 +376,7 @@ def main() -> int:
             personal_stable_sha=args.personal_stable_sha,
             run_id=args.run_id,
             updated_at=now,
+            upstream_main_sha=args.upstream_main_sha or None,
         )
     write_json(args.state, state)
     return 0

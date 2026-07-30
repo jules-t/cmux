@@ -5,10 +5,14 @@ import hashlib
 import json
 import pathlib
 import plistlib
+import re
 import zipfile
 
 from personal.common import ControlError, load_json
 from personal.official_runtime_manifest import validate_official_runtime_manifest
+
+
+SOURCE_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 def sha256(path: pathlib.Path) -> str:
@@ -44,6 +48,7 @@ def verify_archive_bundle(
     source_sha: str,
     base_tag: str,
     personal_tag: str,
+    upstream_main_sha: str | None = None,
 ) -> None:
     app_root = f"{config['app_name']}.app/Contents"
     plist_member = f"{app_root}/Info.plist"
@@ -67,6 +72,14 @@ def verify_archive_bundle(
                 "CMUXPersonalBaseTag": base_tag,
                 "CMUXPersonalReleaseTag": personal_tag,
             }
+            if upstream_main_sha:
+                if not SOURCE_SHA_RE.fullmatch(upstream_main_sha):
+                    raise ControlError("upstream main SHA is not a full lowercase commit SHA")
+                expected_plist["CMUXPersonalUpstreamMainSHA"] = upstream_main_sha
+            elif "CMUXPersonalUpstreamMainSHA" in plist:
+                raise ControlError(
+                    "stable app archive unexpectedly declares an upstream main SHA"
+                )
             for key, expected in expected_plist.items():
                 if plist.get(key) != expected:
                     raise ControlError(
@@ -89,6 +102,7 @@ def verify_archive_bundle(
                 runtime_manifest,
                 repository=str(config["upstream_repository"]),
                 base_tag=base_tag,
+                channel="nightly" if upstream_main_sha else "stable",
             )
 
             binaries = [
@@ -113,6 +127,7 @@ def verify_assets(
     source_sha: str,
     base_tag: str,
     personal_tag: str,
+    upstream_main_sha: str | None = None,
 ) -> dict:
     archive_name = str(config["artifact_name"])
     manifest_name = str(config["manifest_name"])
@@ -138,6 +153,15 @@ def verify_assets(
             raise ControlError(
                 f"manifest {key} is {manifest.get(key)!r}, expected {value!r}"
             )
+    if upstream_main_sha:
+        if not SOURCE_SHA_RE.fullmatch(upstream_main_sha):
+            raise ControlError("upstream main SHA is not a full lowercase commit SHA")
+        if manifest.get("upstream_main_sha") != upstream_main_sha:
+            raise ControlError(
+                "release manifest upstream main SHA does not match the requested source base"
+            )
+    elif manifest.get("upstream_main_sha") is not None:
+        raise ControlError("stable release manifest unexpectedly declares an upstream main SHA")
     digest = sha256(archive)
     if manifest.get("archive_sha256") != digest:
         raise ControlError("archive digest does not match the manifest")
@@ -152,6 +176,7 @@ def verify_assets(
         source_sha=source_sha,
         base_tag=base_tag,
         personal_tag=personal_tag,
+        upstream_main_sha=upstream_main_sha,
     )
     return manifest
 
@@ -163,6 +188,7 @@ def main() -> int:
     parser.add_argument("--source-sha", required=True)
     parser.add_argument("--base-tag", required=True)
     parser.add_argument("--personal-tag", required=True)
+    parser.add_argument("--upstream-main-sha", default="")
     args = parser.parse_args()
     verify_assets(
         pathlib.Path(args.directory),
@@ -170,6 +196,7 @@ def main() -> int:
         source_sha=args.source_sha,
         base_tag=args.base_tag,
         personal_tag=args.personal_tag,
+        upstream_main_sha=args.upstream_main_sha or None,
     )
     print("release assets: verified")
     return 0
