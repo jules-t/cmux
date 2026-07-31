@@ -104,6 +104,26 @@ class CandidateManagerTests(unittest.TestCase):
             verification["candidate_commit"],
         )
 
+    def test_clean_rebase_supplies_automation_committer_identity(self) -> None:
+        baseline = make_baseline(
+            self.repo,
+            source_ref="personal/stable",
+            current_base_ref="v1.0.0",
+            target_ref="v1.0.1",
+            candidate_branch="candidate/personal-v1.0.1",
+            policy=POLICY,
+        )
+        command(self.repo, "config", "user.name", "")
+        command(self.repo, "config", "user.email", "")
+
+        result = rebase_candidate(self.repo, baseline, POLICY, leave_conflicts=False)
+
+        self.assertEqual(result["status"], "clean")
+        self.assertEqual(
+            command(self.repo, "log", "-1", "--format=%cn <%ce>"),
+            "cmux Personal automation <actions@users.noreply.github.com>",
+        )
+
     def test_conflicting_source_change_is_reported(self) -> None:
         command(self.repo, "switch", "personal/stable")
         write(self.repo / "feature.txt", "personal version\n")
