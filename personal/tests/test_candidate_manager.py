@@ -231,13 +231,11 @@ class CandidateManagerTests(unittest.TestCase):
         hook = self.repo / ".git" / "hooks" / "pre-rebase"
         hook.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
         hook.chmod(0o755)
-        result = rebase_candidate(self.repo, baseline, POLICY, leave_conflicts=False)
-        self.assertEqual(result["status"], "conflict")
-        self.assertFalse(result["eligible_for_agent"])
-        self.assertIn(
-            "git reported a conflict without any unmerged paths",
-            result["reasons"],
-        )
+        with self.assertRaisesRegex(
+            ControlError,
+            "candidate rebase failed without file conflicts",
+        ):
+            rebase_candidate(self.repo, baseline, POLICY, leave_conflicts=False)
 
 
 if __name__ == "__main__":

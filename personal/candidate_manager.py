@@ -20,6 +20,8 @@ from personal.conflict_policy import classify_conflicts, path_matches
 
 
 BRANCH_RE = re.compile(r"^(?:candidate|canary)/[A-Za-z0-9._/-]+$")
+AUTOMATION_COMMITTER_NAME = "cmux Personal automation"
+AUTOMATION_COMMITTER_EMAIL = "actions@users.noreply.github.com"
 
 
 def git(repo: pathlib.Path, *arguments: str, check: bool = True):
@@ -140,6 +142,8 @@ def rebase_candidate(
     git(repo, "rebase", "--abort", check=False)
     git(repo, "switch", "--detach", baseline["source_commit"])
     git(repo, "switch", "--force-create", baseline["candidate_branch"])
+    git(repo, "config", "--local", "user.name", AUTOMATION_COMMITTER_NAME)
+    git(repo, "config", "--local", "user.email", AUTOMATION_COMMITTER_EMAIL)
     environment = os.environ.copy()
     environment.update({"GIT_EDITOR": "true", "GIT_SEQUENCE_EDITOR": "true"})
     result = run(
@@ -167,6 +171,13 @@ def rebase_candidate(
     paths = sorted(
         set(list_lines(git_output(repo, "diff", "--name-only", "--diff-filter=U")))
     )
+    detail = result.stderr.strip() or result.stdout.strip()
+    if not paths:
+        git(repo, "rebase", "--abort", check=False)
+        raise ControlError(
+            "candidate rebase failed without file conflicts"
+            + (f": {detail}" if detail else "")
+        )
     classification = classify_conflicts(
         paths,
         marker_count=count_conflict_markers(repo, paths),
@@ -176,7 +187,7 @@ def rebase_candidate(
         {
             "status": "conflict",
             "candidate_commit": None,
-            "detail": result.stderr.strip() or result.stdout.strip(),
+            "detail": detail,
         }
     )
     if not leave_conflicts:
