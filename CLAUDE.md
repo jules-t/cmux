@@ -1,5 +1,33 @@
 # cmux agent notes
 
+## Personal fork Git workflow
+
+These rules apply to implementation work for `personal/stable`. Read-only questions,
+diagnosis, and review must not create branches or mutate the repository.
+
+1. Inspect `git status --short --branch` first and preserve all existing work.
+2. If already on the task's feature branch or worktree, continue there. Otherwise,
+   fetch `origin/personal/stable` and create a task-specific branch or worktree from
+   the exact `origin/personal/stable` commit.
+3. Treat `personal/stable` as automation-managed. Never run `git pull` on it, use a
+   diverged local copy as a branch base, or commit directly to it. Never reset,
+   rewrite, delete, or overwrite existing user work to prepare a task.
+4. After the relevant validation below passes, stage only task files, commit and push
+   the feature branch, and open a PR targeting `personal/stable`.
+5. The PR is an automated integration boundary: the user does not need to review the
+   diff or click Merge. Wait for any checks that are configured or triggered; when
+   they pass and the PR has no conflicts or unrelated changes, merge it automatically
+   and remove the feature branch. If no GitHub checks exist, relevant local validation
+   is the merge gate.
+6. Stop and report when validation fails, a conflict or unrelated change appears, or
+   an approval explicitly required elsewhere in this file is still missing.
+
+For app, runtime, and UI changes, keep the explicit post-dogfood approval required
+below; after that approval, the agent performs the merge. For changes without an
+explicit approval requirement, do not request human PR review unless the user asks to
+hold the merge. This personal-fork delivery flow supersedes the generic instruction
+below to stop after opening a PR, but it does not waive validation or dogfooding.
+
 ## Setup
 
 `./scripts/setup.sh` initializes submodules, builds GhosttyKit, and installs the pbxproj normalization pre-commit hook.
