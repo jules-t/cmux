@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "decision",
+    "model",
+    "upstream_repository"
+  ],
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": ["pass"]
+    },
+    "model": {
+      "type": "string",
+      "enum": ["deepseek-v4-flash"]
+    },
+    "upstream_repository": {
+      "type": "string",
+      "enum": ["manaflow-ai/cmux"]
+    }
+  }
+}

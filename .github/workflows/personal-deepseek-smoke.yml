@@ -1,0 +1,48 @@
+name: Validate DeepSeek Codex integration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out trusted control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: control
+          persist-credentials: false
+
+      - name: Exercise DeepSeek through the Codex harness
+        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
+        with:
+          openai-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
+          responses-api-endpoint: https://api.deepseek.com/responses
+          permission-profile: ":read-only"
+          safety-strategy: drop-sudo
+          working-directory: ${{ github.workspace }}/control
+          prompt: |
+            Read personal/config.json without modifying any files.
+            Return a JSON object confirming that upstream_repository is
+            manaflow-ai/cmux. Set decision to pass and model to
+            deepseek-v4-flash.
+          output-file: ${{ runner.temp }}/deepseek-smoke-output.json
+          output-schema-file: ${{ github.workspace }}/control/personal/deepseek-smoke-output.schema.json
+          model: deepseek-v4-flash
+          effort: max
+          codex-args: '["--config","model_catalog_json=\"${{ github.workspace }}/control/.github/codex/deepseek-models.json\""]'
+
+      - name: Verify structured DeepSeek response
+        run: |
+          set -euo pipefail
+          jq -e '
+            .decision == "pass" and
+            .model == "deepseek-v4-flash" and
+            .upstream_repository == "manaflow-ai/cmux"
+          ' "$RUNNER_TEMP/deepseek-smoke-output.json"
