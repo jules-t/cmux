@@ -145,9 +145,9 @@ jobs:
       - name: Detect configured conflict agent
         id: agent
         env:
-          OPENAI_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
-          if [[ -n "$OPENAI_KEY" ]]; then
+          if [[ -n "$DEEPSEEK_KEY" ]]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
@@ -237,11 +237,12 @@ jobs:
           install -m 600 control/.github/codex/resolver-config.toml \
             "$RUNNER_TEMP/resolver-codex-home/config.toml"
 
-      - name: Resolve compatible conflicts with Codex
+      - name: Resolve compatible conflicts with DeepSeek via Codex
         id: resolver
         uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
         with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          openai-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
+          responses-api-endpoint: https://api.deepseek.com/responses
           codex-home: ${{ runner.temp }}/resolver-codex-home
           permission-profile: "rebase-workspace"
           safety-strategy: drop-sudo
@@ -249,7 +250,9 @@ jobs:
           prompt-file: ${{ github.workspace }}/control/.github/codex/prompts/resolve-cmux-conflicts.txt
           output-file: ${{ runner.temp }}/resolver-output.json
           output-schema-file: ${{ github.workspace }}/control/personal/resolver-output.schema.json
-          effort: high
+          model: deepseek-v4-flash
+          effort: max
+          codex-args: '["--config","model_catalog_json=\"${{ github.workspace }}/control/.github/codex/deepseek-models.json\""]'
           allow-bots: true
           allow-bot-users: github-actions
 
@@ -330,17 +333,20 @@ jobs:
           fi
           git -C candidate cat-file -e "${expected_source_commit}^{commit}"
 
-      - name: Independently review the resolution
+      - name: Independently review the resolution with DeepSeek via Codex
         uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
         with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          openai-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
+          responses-api-endpoint: https://api.deepseek.com/responses
           permission-profile: ":read-only"
           safety-strategy: drop-sudo
           working-directory: ${{ github.workspace }}/candidate
           prompt-file: ${{ github.workspace }}/control/.github/codex/prompts/review-cmux-resolution.txt
           output-file: ${{ runner.temp }}/reviewer-output.json
           output-schema-file: ${{ github.workspace }}/control/personal/reviewer-output.schema.json
-          effort: high
+          model: deepseek-v4-flash
+          effort: max
+          codex-args: '["--config","model_catalog_json=\"${{ github.workspace }}/control/.github/codex/deepseek-models.json\""]'
           allow-bots: true
           allow-bot-users: github-actions
 
@@ -468,4 +474,4 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --assignee "$GITHUB_REPOSITORY_OWNER" \
             --title "cmux Personal automatic update requires attention" \
-            --body "The release monitor or automatic update stopped before completion (target: ${TARGET_TAG:-unknown}). No failed or unverified app was exposed to the local updater. This happens for source mismatches, protected/functional conflicts, low-confidence review, a missing OPENAI_API_KEY, or a failed gate. Review: ${RUN_URL}"
+            --body "The release monitor or automatic update stopped before completion (target: ${TARGET_TAG:-unknown}). No failed or unverified app was exposed to the local updater. This happens for source mismatches, protected/functional conflicts, low-confidence review, a missing DEEPSEEK_API_KEY, or a failed gate. Review: ${RUN_URL}"

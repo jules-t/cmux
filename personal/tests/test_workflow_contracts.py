@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import pathlib
 import tempfile
 import unittest
@@ -227,6 +228,56 @@ jobs:
                     'if [[ "$fetched_source_commit" != "$expected_source_commit" ]]',
                     text,
                 )
+
+    def test_conflict_agents_use_deepseek_v4_flash(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        catalog = json.loads(
+            (repository / ".github" / "codex" / "deepseek-models.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        models = {model["slug"]: model for model in catalog["models"]}
+        self.assertEqual(set(models), {"deepseek-v4-flash", "deepseek-v4-pro"})
+        self.assertEqual(models["deepseek-v4-flash"]["context_window"], 1_048_576)
+        self.assertEqual(models["deepseek-v4-flash"]["apply_patch_tool_type"], "freeform")
+        self.assertEqual(
+            {
+                level["effort"]
+                for level in models["deepseek-v4-flash"][
+                    "supported_reasoning_levels"
+                ]
+            },
+            {"low", "high", "max"},
+        )
+
+        for workflow_name in ("personal-main-canary.yml", "personal-update.yml"):
+            with self.subTest(workflow=workflow_name):
+                text = (
+                    repository / ".github" / "workflows" / workflow_name
+                ).read_text(encoding="utf-8")
+                self.assertNotIn("secrets.OPENAI_API_KEY", text)
+                self.assertNotIn("OPENAI_KEY", text)
+                self.assertEqual(text.count("secrets.DEEPSEEK_API_KEY"), 3)
+                self.assertEqual(
+                    text.count("responses-api-endpoint: https://api.deepseek.com/responses"),
+                    2,
+                )
+                self.assertEqual(text.count("model: deepseek-v4-flash"), 2)
+                self.assertEqual(text.count("effort: max"), 2)
+                self.assertEqual(text.count("deepseek-models.json"), 2)
+
+    def test_deepseek_smoke_workflow_is_manual_and_read_only(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        text = (
+            repository / ".github" / "workflows" / "personal-deepseek-smoke.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", text)
+        self.assertNotIn("schedule:", text)
+        self.assertIn('permission-profile: ":read-only"', text)
+        self.assertIn("secrets.DEEPSEEK_API_KEY", text)
+        self.assertIn("responses-api-endpoint: https://api.deepseek.com/responses", text)
+        self.assertIn("model: deepseek-v4-flash", text)
+        self.assertIn("effort: max", text)
 
     def test_stable_update_rebases_from_a_recorded_main_base_when_present(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]
