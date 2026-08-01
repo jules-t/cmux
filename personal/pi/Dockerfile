@@ -12,7 +12,7 @@ RUN apt-get update \
 WORKDIR /opt/pi
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
-COPY run_agent.mjs ./
+COPY run_agent.mjs structured_output.mjs structured_output.test.mjs ./
 RUN npm run check
 
 ENTRYPOINT ["node", "/opt/pi/run_agent.mjs"]
