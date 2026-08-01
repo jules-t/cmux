@@ -271,8 +271,16 @@ jobs:
         prompt = (
             repository / ".github" / "codex" / "prompts" / "resolve-cmux-conflicts.txt"
         ).read_text(encoding="utf-8")
+        report_script = (repository / "personal" / "resolver_report.py").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("write a JSON object to `.cmux-resolver-output.json`", prompt)
         self.assertIn("Your conversational final\nmessage is not used", prompt)
+        self.assertIn(
+            'EXPECTED_KEYS = {"decision", "confidence", "summary", "files"}',
+            report_script,
+        )
+        self.assertIn("source.unlink(missing_ok=True)", report_script)
 
         for workflow_name in ("personal-main-canary.yml", "personal-update.yml"):
             with self.subTest(workflow=workflow_name):
@@ -281,14 +289,15 @@ jobs:
                 ).read_text(encoding="utf-8")
                 self.assertIn("name: Collect and validate resolver report", text)
                 self.assertIn(
-                    "SOURCE_REPORT: ${{ github.workspace }}/source/.cmux-resolver-output.json",
+                    "python3 control/personal/resolver_report.py collect",
                     text,
                 )
                 self.assertIn(
-                    'set(value) != {"decision", "confidence", "summary", "files"}',
+                    "python3 control/personal/resolver_report.py require-resolved",
                     text,
                 )
-                self.assertIn("source.unlink(missing_ok=True)", text)
+                self.assertNotIn("python3 -c", text)
+                self.assertNotIn("<<'PY'", text)
 
     def test_deepseek_smoke_workflow_is_manual_and_read_only(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]

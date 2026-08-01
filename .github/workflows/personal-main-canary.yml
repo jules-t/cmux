@@ -325,44 +325,11 @@ jobs:
           allow-bot-users: github-actions
 
       - name: Collect and validate resolver report
-        env:
-          SOURCE_REPORT: ${{ github.workspace }}/source/.cmux-resolver-output.json
-          DESTINATION_REPORT: ${{ runner.temp }}/resolver-output.json
         run: |
           set -euo pipefail
-          python3 - "$SOURCE_REPORT" "$DESTINATION_REPORT" <<'PY'
-          import json
-          import pathlib
-          import sys
-
-          source, destination = map(pathlib.Path, sys.argv[1:])
-          try:
-              value = json.loads(source.read_text(encoding="utf-8"))
-          except (OSError, json.JSONDecodeError) as exc:
-              raise SystemExit(f"resolver did not produce a valid JSON report: {exc}") from exc
-          finally:
-              source.unlink(missing_ok=True)
-
-          def invalid(message):
-              raise SystemExit(f"invalid resolver report: {message}")
-
-          if not isinstance(value, dict) or set(value) != {"decision", "confidence", "summary", "files"}:
-              invalid("expected exactly decision, confidence, summary, and files")
-          if value["decision"] not in {"resolved", "stop"}:
-              invalid("decision must be resolved or stop")
-          if type(value["confidence"]) not in {int, float} or not 0 <= value["confidence"] <= 1:
-              invalid("confidence must be a number from 0 through 1")
-          if not isinstance(value["summary"], str) or not value["summary"]:
-              invalid("summary must be a non-empty string")
-          if not isinstance(value["files"], list):
-              invalid("files must be an array")
-          for item in value["files"]:
-              if not isinstance(item, dict) or set(item) != {"path", "resolution"}:
-                  invalid("each files entry must contain exactly path and resolution")
-              if not all(isinstance(item[key], str) and item[key] for key in ("path", "resolution")):
-                  invalid("each files entry must use non-empty strings")
-          destination.write_text(json.dumps(value, separators=(",", ":")) + "\n", encoding="utf-8")
-          PY
+          python3 control/personal/resolver_report.py collect \
+            --source "${{ github.workspace }}/source/.cmux-resolver-output.json" \
+            --destination "$RUNNER_TEMP/resolver-output.json"
 
       - name: Verify resolved candidate deterministically
         id: verify
@@ -370,7 +337,8 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/control
         run: |
           set -euo pipefail
-          python3 -c 'import json,sys; value=json.load(open(sys.argv[1])); assert value["decision"] == "resolved", value' "$RUNNER_TEMP/resolver-output.json"
+          python3 control/personal/resolver_report.py require-resolved \
+            --report "$RUNNER_TEMP/resolver-output.json"
           python3 control/personal/candidate_manager.py verify \
             --repo source \
             --policy control/personal/conflict-policy.json \
