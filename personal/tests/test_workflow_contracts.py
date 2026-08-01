@@ -183,39 +183,35 @@ jobs:
 
     def test_conflict_resolvers_use_narrow_rebase_permissions(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]
-        config = (
-            repository / ".github" / "codex" / "resolver-config.toml"
-        ).read_text(encoding="utf-8")
-        self.assertIn('extends = ":workspace"', config)
-        self.assertIn('".git" = "write"', config)
-        self.assertIn('".agents" = "read"', config)
-        self.assertIn('".codex" = "read"', config)
-        self.assertNotIn(":danger-full-access", config)
-        self.assertNotIn("enabled = true", config)
+        sandbox = (repository / "personal" / "ci" / "run_pi_agent.sh").read_text(
+            encoding="utf-8"
+        )
+        runner = (repository / "personal" / "pi" / "run_agent.mjs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('WORKSPACE_BIND=(--bind "$WORKSPACE_ROOT" /workspace)', sandbox)
+        self.assertIn('WORKSPACE_BIND=(--ro-bind "$WORKSPACE_ROOT" /workspace)', sandbox)
+        self.assertIn('--ro-bind "$CONTROL_ROOT" /control', sandbox)
+        self.assertIn("--clearenv", sandbox)
+        self.assertIn("--cap-drop ALL", sandbox)
+        self.assertIn("--unshare-pid", sandbox)
+        self.assertIn("env -u DEEPSEEK_API_KEY bwrap", sandbox)
+        self.assertNotIn("--setenv DEEPSEEK_API_KEY", sandbox)
+        self.assertIn('resolver: ["read", "bash", "edit", "write"', runner)
+        self.assertIn('reviewer: ["read", "bash", "grep", "find", "ls"]', runner)
+        self.assertNotIn('reviewer: ["read", "bash", "edit"', runner)
+        self.assertIn("process.stdin.setEncoding", runner)
+        self.assertNotIn("process.env.DEEPSEEK_API_KEY", runner)
 
         for workflow_name in ("personal-main-canary.yml", "personal-update.yml"):
             with self.subTest(workflow=workflow_name):
                 text = (
                     repository / ".github" / "workflows" / workflow_name
                 ).read_text(encoding="utf-8")
-                self.assertIn(
-                    "control/.github/codex/resolver-config.toml",
-                    text,
-                )
-                self.assertIn(
-                    "codex-home: ${{ runner.temp }}/resolver-codex-home",
-                    text,
-                )
-                self.assertIn(
-                    'permission-profile: "rebase-workspace"',
-                    text,
-                )
-                self.assertNotIn(
-                    "permission-profile: \":workspace\"\n"
-                    "          safety-strategy: drop-sudo\n"
-                    "          working-directory: ${{ github.workspace }}/source",
-                    text,
-                )
+                self.assertIn('--workspace-root "$GITHUB_WORKSPACE/source"', text)
+                self.assertIn("--profile resolver", text)
+                self.assertIn('--workspace-root "$GITHUB_WORKSPACE"', text)
+                self.assertIn("--profile reviewer", text)
                 self.assertIn(
                     ".source_commit | select(type == \"string\"",
                     text,
@@ -231,23 +227,29 @@ jobs:
 
     def test_conflict_agents_use_deepseek_v4_flash(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]
-        catalog = json.loads(
-            (repository / ".github" / "codex" / "deepseek-models.json").read_text(
+        package = json.loads(
+            (repository / "personal" / "pi" / "package.json").read_text(
                 encoding="utf-8"
             )
         )
-        models = {model["slug"]: model for model in catalog["models"]}
-        self.assertEqual(set(models), {"deepseek-v4-flash", "deepseek-v4-pro"})
-        self.assertEqual(models["deepseek-v4-flash"]["context_window"], 1_048_576)
-        self.assertEqual(models["deepseek-v4-flash"]["apply_patch_tool_type"], "freeform")
         self.assertEqual(
-            {
-                level["effort"]
-                for level in models["deepseek-v4-flash"][
-                    "supported_reasoning_levels"
-                ]
-            },
-            {"low", "high", "max"},
+            package["dependencies"],
+            {"@earendil-works/pi-coding-agent": "0.83.0"},
+        )
+        runner = (repository / "personal" / "pi" / "run_agent.mjs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('const PROVIDER = "deepseek";', runner)
+        self.assertIn('const MODEL = "deepseek-v4-flash";', runner)
+        self.assertIn('const THINKING_LEVEL = "max";', runner)
+        self.assertIn("ModelRuntime.create", runner)
+        self.assertIn("setRuntimeApiKey", runner)
+        self.assertNotIn("process.env.DEEPSEEK_API_KEY", runner)
+        self.assertFalse(
+            any(
+                path.is_file()
+                for path in (repository / ".github" / "codex").rglob("*")
+            )
         )
 
         for workflow_name in ("personal-main-canary.yml", "personal-update.yml"):
@@ -258,18 +260,35 @@ jobs:
                 self.assertNotIn("secrets.OPENAI_API_KEY", text)
                 self.assertNotIn("OPENAI_KEY", text)
                 self.assertEqual(text.count("secrets.DEEPSEEK_API_KEY"), 3)
-                self.assertEqual(
-                    text.count("responses-api-endpoint: https://api.deepseek.com/responses"),
-                    2,
+                self.assertNotIn("openai/", text.lower())
+                self.assertNotIn("codex", text.lower())
+                self.assertEqual(text.count("run_pi_agent.sh"), 2)
+                self.assertEqual(text.count("setup_pi.sh"), 2)
+                self.assertEqual(text.count('node-version: "24"'), 2)
+
+    def test_control_checks_validate_the_pinned_pi_runner(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        check_script = (
+            repository / "personal" / "ci" / "check_control_plane.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("--prefix personal/pi", check_script)
+        self.assertIn("npm --prefix personal/pi run check", check_script)
+
+        for workflow_name in ("personal-build.yml", "personal-control-checks.yml"):
+            with self.subTest(workflow=workflow_name):
+                text = (
+                    repository / ".github" / "workflows" / workflow_name
+                ).read_text(encoding="utf-8")
+                self.assertIn('node-version: "24"', text)
+                self.assertIn(
+                    "cache-dependency-path: personal/pi/package-lock.json",
+                    text,
                 )
-                self.assertEqual(text.count("model: deepseek-v4-flash"), 2)
-                self.assertEqual(text.count("effort: max"), 2)
-                self.assertEqual(text.count("deepseek-models.json"), 2)
 
     def test_conflict_resolvers_require_a_valid_durable_report(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]
         prompt = (
-            repository / ".github" / "codex" / "prompts" / "resolve-cmux-conflicts.txt"
+            repository / ".github" / "pi" / "prompts" / "resolve-cmux-conflicts.txt"
         ).read_text(encoding="utf-8")
         report_script = (repository / "personal" / "resolver_report.py").read_text(
             encoding="utf-8"
@@ -306,11 +325,17 @@ jobs:
         ).read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", text)
         self.assertNotIn("schedule:", text)
-        self.assertIn('permission-profile: ":read-only"', text)
+        self.assertIn("--profile smoke", text)
+        self.assertIn('--workspace-root "$GITHUB_WORKSPACE/control"', text)
         self.assertIn("secrets.DEEPSEEK_API_KEY", text)
-        self.assertIn("responses-api-endpoint: https://api.deepseek.com/responses", text)
-        self.assertIn("model: deepseek-v4-flash", text)
-        self.assertIn("effort: max", text)
+        self.assertIn("agent_output.py smoke", text)
+        self.assertNotIn("openai/", text.lower())
+        self.assertNotIn("codex", text.lower())
+
+        runner = (repository / "personal" / "pi" / "run_agent.mjs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('smoke: ["read", "grep", "find", "ls"]', runner)
 
     def test_stable_update_rebases_from_a_recorded_main_base_when_present(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]

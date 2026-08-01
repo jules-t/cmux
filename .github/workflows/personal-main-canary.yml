@@ -298,31 +298,26 @@ jobs:
           cp "$RUNNER_TEMP/resolver-conflict.json" source/personal-conflict-result.json
           cp control/personal/conflict-policy.json source/personal-conflict-policy.json
 
-      - name: Configure least-privilege rebase permissions
-        run: |
-          set -euo pipefail
-          install -d -m 700 "$RUNNER_TEMP/resolver-codex-home"
-          install -m 600 control/.github/codex/resolver-config.toml \
-            "$RUNNER_TEMP/resolver-codex-home/config.toml"
-
-      - name: Resolve compatible conflicts with DeepSeek via Codex
-        id: resolver
-        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
+      - name: Set up Node.js for Pi
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          openai-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
-          responses-api-endpoint: https://api.deepseek.com/responses
-          codex-home: ${{ runner.temp }}/resolver-codex-home
-          permission-profile: "rebase-workspace"
-          safety-strategy: drop-sudo
-          working-directory: ${{ github.workspace }}/source
-          prompt-file: ${{ github.workspace }}/control/.github/codex/prompts/resolve-cmux-conflicts.txt
-          output-file: ${{ runner.temp }}/resolver-output.json
-          output-schema-file: ${{ github.workspace }}/control/personal/resolver-output.schema.json
-          model: deepseek-v4-flash
-          effort: max
-          codex-args: '["--config","model_catalog_json=\"${{ github.workspace }}/control/.github/codex/deepseek-models.json\""]'
-          allow-bots: true
-          allow-bot-users: github-actions
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: control/personal/pi/package-lock.json
+
+      - name: Install sandboxed Pi runner
+        run: control/personal/ci/setup_pi.sh "$GITHUB_WORKSPACE/control"
+
+      - name: Resolve compatible conflicts with Pi and DeepSeek
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          control/personal/ci/run_pi_agent.sh \
+            --control "$GITHUB_WORKSPACE/control" \
+            --workspace-root "$GITHUB_WORKSPACE/source" \
+            --working-directory . \
+            --prompt "$GITHUB_WORKSPACE/control/.github/pi/prompts/resolve-cmux-conflicts.txt" \
+            --profile resolver
 
       - name: Collect and validate resolver report
         run: |
@@ -409,22 +404,32 @@ jobs:
           fi
           git -C candidate cat-file -e "${expected_source_commit}^{commit}"
 
-      - name: Independently review the resolution with DeepSeek via Codex
-        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
+      - name: Set up Node.js for Pi
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          openai-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
-          responses-api-endpoint: https://api.deepseek.com/responses
-          permission-profile: ":read-only"
-          safety-strategy: drop-sudo
-          working-directory: ${{ github.workspace }}/candidate
-          prompt-file: ${{ github.workspace }}/control/.github/codex/prompts/review-cmux-resolution.txt
-          output-file: ${{ runner.temp }}/reviewer-output.json
-          output-schema-file: ${{ github.workspace }}/control/personal/reviewer-output.schema.json
-          model: deepseek-v4-flash
-          effort: max
-          codex-args: '["--config","model_catalog_json=\"${{ github.workspace }}/control/.github/codex/deepseek-models.json\""]'
-          allow-bots: true
-          allow-bot-users: github-actions
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: control/personal/pi/package-lock.json
+
+      - name: Install sandboxed Pi runner
+        run: control/personal/ci/setup_pi.sh "$GITHUB_WORKSPACE/control"
+
+      - name: Independently review the resolution with Pi and DeepSeek
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          control/personal/ci/run_pi_agent.sh \
+            --control "$GITHUB_WORKSPACE/control" \
+            --workspace-root "$GITHUB_WORKSPACE" \
+            --working-directory candidate \
+            --prompt "$GITHUB_WORKSPACE/control/.github/pi/prompts/review-cmux-resolution.txt" \
+            --profile reviewer \
+            --output "$RUNNER_TEMP/reviewer-output.json"
+
+      - name: Validate structured reviewer response
+        run: |
+          python3 control/personal/agent_output.py reviewer \
+            "$RUNNER_TEMP/reviewer-output.json"
 
       - name: Apply fail-closed review gate
         id: gate

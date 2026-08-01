@@ -1,0 +1,14 @@
+{
+  "name": "cmux-personal-pi-runner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node run_agent.mjs --self-check"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.83.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
