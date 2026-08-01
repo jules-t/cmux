@@ -29,3 +29,15 @@ If and only if the resolution is safe:
 
 Return `decision: "resolved"` only after the rebase has completed. Otherwise return `decision: "stop"`.
 Be specific about each resolution in the structured output.
+
+The workflow needs a durable, machine-readable handoff in addition to your final response. Before
+finishing, write a JSON object to `.cmux-resolver-output.json` in the repository root. It must be
+valid JSON with exactly these top-level fields:
+- `decision`: either `"resolved"` or `"stop"`
+- `confidence`: a number from 0 through 1
+- `summary`: a non-empty string
+- `files`: an array of objects, each with exactly non-empty string fields `path` and `resolution`
+
+Do not put Markdown fences, prose, or any extra fields in that file. The workflow validates and
+canonicalizes this file before it will verify or promote the candidate. Your conversational final
+message is not used as the machine-readable handoff.
