@@ -78,5 +78,11 @@ fi
 
 bash -n personal/ci/*.sh
 "$SHELLCHECK_BINARY" personal/ci/*.sh
+npm ci \
+  --prefix personal/pi \
+  --ignore-scripts \
+  --no-audit \
+  --no-fund
+npm --prefix personal/pi run check
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -v -s personal/tests -t .
 PYTHONDONTWRITEBYTECODE=1 python3 personal/workflow_contracts.py --root "$REPOSITORY_ROOT"

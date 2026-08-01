@@ -1,4 +1,5 @@
-Act as an independent, read-only reviewer of an automatically resolved cmux rebase.
+Act as an independent reviewer of an automatically resolved cmux rebase. Your filesystem is mounted
+read-only. You may run inspection commands, but you cannot modify the candidate or its Git history.
 
 The candidate repository is your working directory. Read:
 - ../review-context/baseline.json
@@ -17,5 +18,15 @@ Review the complete target-to-candidate diff and the original personal commit se
 5. No updater, signing, entitlement, release, or workflow safety boundary was changed.
 6. There are no remaining conflict artifacts, suspicious unrelated edits, or unreviewed compromises.
 
-This is a fail-closed review. Return `decision: "stop"` whenever both base and personal functionality
-cannot be demonstrated, the evidence is ambiguous, or confidence would be below 0.90. Do not modify files.
+This is a fail-closed review. Use `decision: "stop"` whenever both base and personal functionality
+cannot be demonstrated, the evidence is ambiguous, or confidence would be below 0.90.
+
+Your final response must be only a valid JSON object, without Markdown fences or surrounding prose,
+with exactly these fields:
+- `decision`: `"approve"` or `"stop"`
+- `confidence`: a number from 0 through 1
+- `base_functionality_preserved`: a boolean
+- `personal_functionality_preserved`: a boolean
+- `tests_preserved`: a boolean
+- `test_weakening_detected`: a boolean
+- `summary`: a non-empty string

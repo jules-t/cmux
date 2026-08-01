@@ -1,0 +1,6 @@
+Read personal/config.json without modifying any files. Confirm that `upstream_repository` is
+`manaflow-ai/cmux`.
+
+Your final response must be only a valid JSON object, without Markdown fences or surrounding prose,
+with exactly these fields and values:
+{"decision":"pass","model":"deepseek-v4-flash","upstream_repository":"manaflow-ai/cmux"}

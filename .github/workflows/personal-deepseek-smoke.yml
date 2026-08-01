@@ -1,4 +1,4 @@
-name: Validate DeepSeek Codex integration
+name: Validate DeepSeek Pi integration
 
 on:
   workflow_dispatch:
@@ -19,30 +19,22 @@ jobs:
           path: control
           persist-credentials: false
 
-      - name: Exercise DeepSeek through the Codex harness
-        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
-        with:
-          openai-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
-          responses-api-endpoint: https://api.deepseek.com/responses
-          permission-profile: ":read-only"
-          safety-strategy: drop-sudo
-          working-directory: ${{ github.workspace }}/control
-          prompt: |
-            Read personal/config.json without modifying any files.
-            Return a JSON object confirming that upstream_repository is
-            manaflow-ai/cmux. Set decision to pass and model to
-            deepseek-v4-flash.
-          output-file: ${{ runner.temp }}/deepseek-smoke-output.json
-          output-schema-file: ${{ github.workspace }}/control/personal/deepseek-smoke-output.schema.json
-          model: deepseek-v4-flash
-          effort: max
-          codex-args: '["--config","model_catalog_json=\"${{ github.workspace }}/control/.github/codex/deepseek-models.json\""]'
+      - name: Install sandboxed Pi runner
+        run: control/personal/ci/setup_pi.sh "$GITHUB_WORKSPACE/control"
+
+      - name: Exercise DeepSeek through Pi
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          control/personal/ci/run_pi_agent.sh \
+            --control "$GITHUB_WORKSPACE/control" \
+            --workspace-root "$GITHUB_WORKSPACE/control" \
+            --working-directory . \
+            --prompt "$GITHUB_WORKSPACE/control/.github/pi/prompts/deepseek-smoke.txt" \
+            --profile smoke \
+            --output "$RUNNER_TEMP/deepseek-smoke-output.json"
 
       - name: Verify structured DeepSeek response
         run: |
-          set -euo pipefail
-          jq -e '
-            .decision == "pass" and
-            .model == "deepseek-v4-flash" and
-            .upstream_repository == "manaflow-ai/cmux"
-          ' "$RUNNER_TEMP/deepseek-smoke-output.json"
+          python3 control/personal/agent_output.py smoke \
+            "$RUNNER_TEMP/deepseek-smoke-output.json"
