@@ -2,15 +2,14 @@
 set -euo pipefail
 
 CONTROL_ROOT="${1:?usage: setup_pi.sh CONTROL_ROOT}"
+PI_IMAGE="cmux-personal-pi-runner:0.83.0"
 
-if ! command -v bwrap >/dev/null 2>&1; then
-  sudo apt-get update
-  sudo apt-get install --yes --no-install-recommends bubblewrap
-fi
+command -v docker >/dev/null || {
+  echo "Docker is required for the Pi sandbox" >&2
+  exit 1
+}
 
-npm ci \
-  --prefix "$CONTROL_ROOT/personal/pi" \
-  --ignore-scripts \
-  --no-audit \
-  --no-fund
-npm --prefix "$CONTROL_ROOT/personal/pi" run check
+docker build \
+  --pull \
+  --tag "$PI_IMAGE" \
+  "$CONTROL_ROOT/personal/pi"

@@ -189,14 +189,19 @@ jobs:
         runner = (repository / "personal" / "pi" / "run_agent.mjs").read_text(
             encoding="utf-8"
         )
-        self.assertIn('WORKSPACE_BIND=(--bind "$WORKSPACE_ROOT" /workspace)', sandbox)
-        self.assertIn('WORKSPACE_BIND=(--ro-bind "$WORKSPACE_ROOT" /workspace)', sandbox)
-        self.assertIn('--ro-bind "$CONTROL_ROOT" /control', sandbox)
-        self.assertIn("--clearenv", sandbox)
+        dockerfile = (repository / "personal" / "pi" / "Dockerfile").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("target=/workspace", sandbox)
+        self.assertIn("target=/workspace,readonly", sandbox)
+        self.assertIn("source=$CONTROL_ROOT,target=/control,readonly", sandbox)
+        self.assertIn("--read-only", sandbox)
         self.assertIn("--cap-drop ALL", sandbox)
-        self.assertIn("--unshare-pid", sandbox)
-        self.assertIn("env -u DEEPSEEK_API_KEY bwrap", sandbox)
-        self.assertNotIn("--setenv DEEPSEEK_API_KEY", sandbox)
+        self.assertIn("--security-opt no-new-privileges", sandbox)
+        self.assertIn("--pull never", sandbox)
+        self.assertIn("env -u DEEPSEEK_API_KEY docker run", sandbox)
+        self.assertNotIn("--env DEEPSEEK_API_KEY", sandbox)
+        self.assertRegex(dockerfile.splitlines()[0], r"^FROM .+@sha256:[0-9a-f]{64}$")
         self.assertIn('resolver: ["read", "bash", "edit", "write"', runner)
         self.assertIn('reviewer: ["read", "bash", "grep", "find", "ls"]', runner)
         self.assertNotIn('reviewer: ["read", "bash", "edit"', runner)
@@ -264,7 +269,6 @@ jobs:
                 self.assertNotIn("codex", text.lower())
                 self.assertEqual(text.count("run_pi_agent.sh"), 2)
                 self.assertEqual(text.count("setup_pi.sh"), 2)
-                self.assertEqual(text.count('node-version: "24"'), 2)
 
     def test_control_checks_validate_the_pinned_pi_runner(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]

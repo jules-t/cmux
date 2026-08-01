@@ -298,13 +298,6 @@ jobs:
           cp "$RUNNER_TEMP/resolver-conflict.json" source/personal-conflict-result.json
           cp control/personal/conflict-policy.json source/personal-conflict-policy.json
 
-      - name: Set up Node.js for Pi
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: control/personal/pi/package-lock.json
-
       - name: Install sandboxed Pi runner
         run: control/personal/ci/setup_pi.sh "$GITHUB_WORKSPACE/control"
 
@@ -403,13 +396,6 @@ jobs:
             exit 1
           fi
           git -C candidate cat-file -e "${expected_source_commit}^{commit}"
-
-      - name: Set up Node.js for Pi
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: control/personal/pi/package-lock.json
 
       - name: Install sandboxed Pi runner
         run: control/personal/ci/setup_pi.sh "$GITHUB_WORKSPACE/control"

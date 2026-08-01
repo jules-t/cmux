@@ -46,7 +46,7 @@ if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
   echo "DEEPSEEK_API_KEY is required" >&2
   exit 1
 fi
-for command_name in bwrap node realpath; do
+for command_name in docker realpath; do
   command -v "$command_name" >/dev/null || {
     echo "required command is unavailable: $command_name" >&2
     exit 1
@@ -70,15 +70,19 @@ esac
 PROMPT_RELATIVE="${PROMPT_FILE#"$CONTROL_ROOT"/}"
 WORKING_RELATIVE="${WORKING_ROOT#"$WORKSPACE_ROOT"}"
 WORKING_RELATIVE="${WORKING_RELATIVE#/}"
-NODE_BINARY="$(realpath "$(command -v node)")"
+PI_IMAGE="cmux-personal-pi-runner:0.83.0"
+docker image inspect "$PI_IMAGE" >/dev/null || {
+  echo "Pi sandbox image is unavailable; run setup_pi.sh first" >&2
+  exit 1
+}
 
 if [[ "$PROFILE" == "resolver" ]]; then
-  WORKSPACE_BIND=(--bind "$WORKSPACE_ROOT" /workspace)
+  WORKSPACE_MOUNT="type=bind,source=$WORKSPACE_ROOT,target=/workspace"
 else
-  WORKSPACE_BIND=(--ro-bind "$WORKSPACE_ROOT" /workspace)
+  WORKSPACE_MOUNT="type=bind,source=$WORKSPACE_ROOT,target=/workspace,readonly"
 fi
 
-OUTPUT_BIND=()
+OUTPUT_MOUNT=()
 OUTPUT_ARGUMENT=()
 if [[ -n "$OUTPUT_FILE" ]]; then
   OUTPUT_PARENT="$(realpath "$(dirname "$OUTPUT_FILE")")"
@@ -95,53 +99,39 @@ if [[ -n "$OUTPUT_FILE" ]]; then
       ;;
   esac
   install -m 600 /dev/null "$OUTPUT_FILE"
-  OUTPUT_BIND=(--bind "$OUTPUT_FILE" /pi-output.json)
+  OUTPUT_MOUNT=(--mount "type=bind,source=$OUTPUT_FILE,target=/pi-output.json")
   OUTPUT_ARGUMENT=(--output /pi-output.json)
 fi
 
-PI_PATH="$(dirname "$NODE_BINARY"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-
 printf '%s' "$DEEPSEEK_API_KEY" |
-  env -u DEEPSEEK_API_KEY bwrap \
-    --die-with-parent \
-    --new-session \
-    --unshare-pid \
-    --unshare-ipc \
-    --unshare-uts \
-    --clearenv \
+  env -u DEEPSEEK_API_KEY docker run \
+    --rm \
+    --interactive \
+    --pull never \
+    --init \
+    --read-only \
     --cap-drop ALL \
-    --ro-bind /bin /bin \
-    --ro-bind /etc /etc \
-    --ro-bind /lib /lib \
-    --ro-bind /lib64 /lib64 \
-    --ro-bind /opt /opt \
-    --ro-bind /run /run \
-    --ro-bind /sbin /sbin \
-    --ro-bind /usr /usr \
-    --proc /proc \
-    --dev /dev \
-    --tmpfs /tmp \
-    --dir /tmp/pi-agent-config \
-    --dir /control \
-    --dir /workspace \
-    --ro-bind "$CONTROL_ROOT" /control \
-    "${WORKSPACE_BIND[@]}" \
-    "${OUTPUT_BIND[@]}" \
-    --ro-bind /dev/null /usr/bin/su \
-    --ro-bind /dev/null /usr/bin/sudo \
-    --setenv CI true \
-    --setenv GIT_EDITOR true \
-    --setenv GIT_SEQUENCE_EDITOR true \
-    --setenv GIT_TERMINAL_PROMPT 0 \
-    --setenv HOME /tmp \
-    --setenv LANG C.UTF-8 \
-    --setenv LC_ALL C.UTF-8 \
-    --setenv PATH "$PI_PATH" \
-    --setenv PI_OFFLINE 1 \
-    --setenv PI_TELEMETRY 0 \
-    --setenv TMPDIR /tmp \
-    --chdir "/workspace${WORKING_RELATIVE:+/$WORKING_RELATIVE}" \
-    "$NODE_BINARY" /control/personal/pi/run_agent.mjs \
+    --security-opt no-new-privileges \
+    --pids-limit 512 \
+    --hostname pi-agent \
+    --user "$(id -u):$(id -g)" \
+    --tmpfs /tmp:rw,nosuid,nodev,mode=1777 \
+    --mount "type=bind,source=$CONTROL_ROOT,target=/control,readonly" \
+    --mount "$WORKSPACE_MOUNT" \
+    "${OUTPUT_MOUNT[@]}" \
+    --env CI=true \
+    --env GIT_EDITOR=true \
+    --env GIT_PAGER=cat \
+    --env GIT_SEQUENCE_EDITOR=true \
+    --env GIT_TERMINAL_PROMPT=0 \
+    --env HOME=/tmp \
+    --env LANG=C.UTF-8 \
+    --env LC_ALL=C.UTF-8 \
+    --env PI_OFFLINE=1 \
+    --env PI_TELEMETRY=0 \
+    --env TMPDIR=/tmp \
+    --workdir "/workspace${WORKING_RELATIVE:+/$WORKING_RELATIVE}" \
+    "$PI_IMAGE" \
       --profile "$PROFILE" \
       --prompt-file "/control/$PROMPT_RELATIVE" \
       "${OUTPUT_ARGUMENT[@]}"
