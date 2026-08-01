@@ -266,6 +266,30 @@ jobs:
                 self.assertEqual(text.count("effort: max"), 2)
                 self.assertEqual(text.count("deepseek-models.json"), 2)
 
+    def test_conflict_resolvers_require_a_valid_durable_report(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        prompt = (
+            repository / ".github" / "codex" / "prompts" / "resolve-cmux-conflicts.txt"
+        ).read_text(encoding="utf-8")
+        self.assertIn("write a JSON object to `.cmux-resolver-output.json`", prompt)
+        self.assertIn("Your conversational final\nmessage is not used", prompt)
+
+        for workflow_name in ("personal-main-canary.yml", "personal-update.yml"):
+            with self.subTest(workflow=workflow_name):
+                text = (
+                    repository / ".github" / "workflows" / workflow_name
+                ).read_text(encoding="utf-8")
+                self.assertIn("name: Collect and validate resolver report", text)
+                self.assertIn(
+                    "SOURCE_REPORT: ${{ github.workspace }}/source/.cmux-resolver-output.json",
+                    text,
+                )
+                self.assertIn(
+                    'set(value) != {"decision", "confidence", "summary", "files"}',
+                    text,
+                )
+                self.assertIn("source.unlink(missing_ok=True)", text)
+
     def test_deepseek_smoke_workflow_is_manual_and_read_only(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]
         text = (
