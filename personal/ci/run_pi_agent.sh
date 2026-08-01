@@ -134,4 +134,5 @@ printf '%s' "$DEEPSEEK_API_KEY" |
     "$PI_IMAGE" \
       --profile "$PROFILE" \
       --prompt-file "/control/$PROMPT_RELATIVE" \
+      --control-root /control \
       "${OUTPUT_ARGUMENT[@]}"

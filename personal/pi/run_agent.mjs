@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { promisify } from "node:util";
 
 import {
   DefaultResourceLoader,
@@ -12,18 +15,38 @@ import {
   createAgentSession,
 } from "@earendil-works/pi-coding-agent";
 
+import { collectValidatedStructuredOutput } from "./structured_output.mjs";
+
 const PROVIDER = "deepseek";
 const MODEL = "deepseek-v4-flash";
 const THINKING_LEVEL = "max";
+const execFileAsync = promisify(execFile);
 const PROFILES = {
   resolver: ["read", "bash", "edit", "write", "grep", "find", "ls"],
   reviewer: ["read", "bash", "grep", "find", "ls"],
   smoke: ["read", "grep", "find", "ls"],
 };
+const OUTPUT_CONTRACTS = {
+  resolver: {
+    label: "resolver report",
+    correctionInstruction:
+      "Rewrite `.cmux-resolver-output.json` with the corrected JSON object. Do not make any other filesystem or Git changes during this correction; your conversational response is not the handoff.",
+  },
+  reviewer: {
+    label: "reviewer response",
+    correctionInstruction:
+      "Return the corrected JSON object as your entire final response.",
+  },
+  smoke: {
+    label: "smoke response",
+    correctionInstruction:
+      "Return the corrected JSON object as your entire final response.",
+  },
+};
 
 function usage() {
   return `Usage:
-  node run_agent.mjs --profile <resolver|reviewer|smoke> --prompt-file <path> [--output <path>]
+  node run_agent.mjs --profile <resolver|reviewer|smoke> --prompt-file <path> --control-root <path> [--output <path>]
   node run_agent.mjs --self-check`;
 }
 
@@ -39,7 +62,11 @@ function parseArguments(arguments_) {
       console.log(usage());
       process.exit(0);
     }
-    if (!["--profile", "--prompt-file", "--output"].includes(argument)) {
+    if (
+      !["--profile", "--prompt-file", "--control-root", "--output"].includes(
+        argument,
+      )
+    ) {
       throw new Error(`unknown argument: ${argument}\n${usage()}`);
     }
     const value = arguments_[index + 1];
@@ -49,6 +76,7 @@ function parseArguments(arguments_) {
     const key = {
       "--profile": "profile",
       "--prompt-file": "promptFile",
+      "--control-root": "controlRoot",
       "--output": "output",
     }[argument];
     result[key] = value;
@@ -60,6 +88,9 @@ function parseArguments(arguments_) {
   }
   if (!result.promptFile) {
     throw new Error(`missing --prompt-file\n${usage()}`);
+  }
+  if (!result.controlRoot) {
+    throw new Error(`missing --control-root\n${usage()}`);
   }
   return result;
 }
@@ -76,8 +107,9 @@ async function readApiKey() {
   return value;
 }
 
-function finalAssistantMessage(session) {
-  return [...session.agent.state.messages]
+function finalAssistantMessage(session, startIndex) {
+  return session.agent.state.messages
+    .slice(startIndex)
     .reverse()
     .find((message) => message.role === "assistant");
 }
@@ -123,6 +155,88 @@ async function selfCheck() {
   console.log(`Pi runner ready: ${model.provider}/${model.id} (${THINKING_LEVEL})`);
 }
 
+function validatorError(error) {
+  for (const value of [error.stderr, error.stdout, error.message]) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "validator rejected the output";
+}
+
+async function runPythonValidator(script, arguments_) {
+  try {
+    await execFileAsync("python3", [script, ...arguments_], {
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+    });
+    return { ok: true };
+  } catch (error) {
+    if (typeof error?.code !== "number") {
+      throw error;
+    }
+    return { ok: false, error: validatorError(error) };
+  }
+}
+
+async function validateAssistantResponse({
+  profile,
+  response,
+  controlRoot,
+  temporaryRoot,
+}) {
+  const candidate = path.join(temporaryRoot, `${profile}-candidate.json`);
+  await fs.writeFile(candidate, `${response}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  const validation = await runPythonValidator(
+    path.join(controlRoot, "personal", "agent_output.py"),
+    [profile, candidate],
+  );
+  if (!validation.ok) {
+    return validation;
+  }
+  return {
+    ok: true,
+    value: await fs.readFile(candidate, "utf8"),
+  };
+}
+
+async function validateResolverReport({ cwd, controlRoot, temporaryRoot }) {
+  const source = path.join(cwd, ".cmux-resolver-output.json");
+  const destination = path.join(temporaryRoot, "resolver-canonical.json");
+  await fs.rm(destination, { force: true });
+  const validation = await runPythonValidator(
+    path.join(controlRoot, "personal", "resolver_report.py"),
+    ["collect", "--source", source, "--destination", destination],
+  );
+  if (!validation.ok) {
+    return validation;
+  }
+
+  const value = await fs.readFile(destination, "utf8");
+  await fs.writeFile(source, value, { encoding: "utf8", mode: 0o600 });
+  return { ok: true, value };
+}
+
+async function runAgentTurn(session, prompt) {
+  const startIndex = session.agent.state.messages.length;
+  await session.prompt(prompt, {
+    expandPromptTemplates: false,
+    source: "rpc",
+  });
+
+  const message = finalAssistantMessage(session, startIndex);
+  if (!message) {
+    throw new Error("Pi completed without an assistant response");
+  }
+  if (message.stopReason === "error" || message.stopReason === "aborted") {
+    throw new Error(message.errorMessage || `Pi stopped with ${message.stopReason}`);
+  }
+  return textFromMessage(message).trim();
+}
+
 async function run(arguments_) {
   const apiKey = await readApiKey();
   const { modelRuntime, model } = await createModelRuntime(apiKey);
@@ -156,31 +270,48 @@ async function run(arguments_) {
 
   const prompt = await fs.readFile(arguments_.promptFile, "utf8");
   console.log(`Starting Pi with ${PROVIDER}/${MODEL} (${THINKING_LEVEL})`);
-  await session.prompt(prompt, {
-    expandPromptTemplates: false,
-    source: "rpc",
-  });
-
-  const message = finalAssistantMessage(session);
-  if (!message) {
-    throw new Error("Pi completed without an assistant response");
-  }
-  if (message.stopReason === "error" || message.stopReason === "aborted") {
-    throw new Error(message.errorMessage || `Pi stopped with ${message.stopReason}`);
-  }
-
-  const response = textFromMessage(message).trim();
-  if (response) {
-    console.log(response);
-  }
-  if (arguments_.output) {
-    if (!response) {
-      throw new Error("Pi did not produce the required structured response");
-    }
-    await fs.writeFile(path.resolve(arguments_.output), `${response}\n`, {
-      encoding: "utf8",
-      mode: 0o600,
+  const temporaryRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), "pi-structured-output-"),
+  );
+  try {
+    const contract = OUTPUT_CONTRACTS[arguments_.profile];
+    const result = await collectValidatedStructuredOutput({
+      initialPrompt: prompt,
+      label: contract.label,
+      correctionInstruction: contract.correctionInstruction,
+      runTurn: (turnPrompt) => runAgentTurn(session, turnPrompt),
+      validate: (response) =>
+        arguments_.profile === "resolver"
+          ? validateResolverReport({
+              cwd,
+              controlRoot: arguments_.controlRoot,
+              temporaryRoot,
+            })
+          : validateAssistantResponse({
+              profile: arguments_.profile,
+              response,
+              controlRoot: arguments_.controlRoot,
+              temporaryRoot,
+            }),
+      onRejected: ({ attempt, error }) => {
+        console.error(
+          `Structured output attempt ${attempt} rejected: ${error}`,
+        );
+      },
     });
+
+    console.log(result.value.trim());
+    if (result.attempts > 1) {
+      console.log(`Structured output accepted on attempt ${result.attempts}`);
+    }
+    if (arguments_.output) {
+      await fs.writeFile(path.resolve(arguments_.output), result.value, {
+        encoding: "utf8",
+        mode: 0o600,
+      });
+    }
+  } finally {
+    await fs.rm(temporaryRoot, { recursive: true, force: true });
   }
 }
 
