@@ -11,7 +11,7 @@ PINNED_ACTION_RE = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
 JOB_RE = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
 NEEDS_RE = re.compile(r"^    needs:\s*(.+?)\s*$", re.MULTILINE)
 RUNNER_RE = re.compile(r"^    runs-on:\s*(.+?)\s*$", re.MULTILINE)
-JOB_IF_RE = re.compile(r"^    if:", re.MULTILINE)
+JOB_IF_RE = re.compile(r"^    if:\s*(.+?)\s*$", re.MULTILINE)
 USES_RE = re.compile(r"^\s+(?:-\s+)?uses:\s*([^#\s]+)", re.MULTILINE)
 PERSONAL_TOKEN = "${{ secrets.PERSONAL_FORK_TOKEN }}"
 MUTATION_MARKERS = (
@@ -130,6 +130,11 @@ def ancestors(job_name: str, jobs: dict[str, Job]) -> frozenset[str]:
 
 def step_input(step: Step, name: str) -> str | None:
     match = re.search(rf"^\s{{10}}{re.escape(name)}:\s*(.+?)\s*$", step.text, re.MULTILINE)
+    return match.group(1).strip() if match else None
+
+
+def job_if_expression(job: Job) -> str | None:
+    match = JOB_IF_RE.search(job.text)
     return match.group(1).strip() if match else None
 
 
@@ -303,6 +308,52 @@ def validate_build_workflow(
         )
 
 
+def validate_main_canary_workflow(
+    path: pathlib.Path,
+    text: str,
+    jobs: dict[str, Job],
+    errors: list[str],
+) -> None:
+    if "workflow_dispatch:" not in text:
+        errors.append(f"{path}: main canary has no manual preflight trigger")
+    for job_name, message in (
+        ("dispatch", "manual runs can reach candidate dispatch"),
+        ("report-blocked", "manual runs can update the blocked issue"),
+    ):
+        job = jobs.get(job_name)
+        if job is None:
+            errors.append(f"{path}: missing required job {job_name!r}")
+        elif "github.event_name == 'schedule'" not in (
+            job_if_expression(job) or ""
+        ):
+            errors.append(f"{path}: {message}")
+
+    preflight = jobs.get("preflight")
+    if preflight is None:
+        errors.append(f"{path}: missing manual preflight result job")
+        return
+    required_needs = frozenset({"observe", "prepare", "resolve", "review"})
+    missing_needs = required_needs - preflight.needs
+    if missing_needs:
+        errors.append(
+            f"{path}: manual preflight result job does not need: "
+            + ", ".join(sorted(missing_needs))
+        )
+    preflight_if = job_if_expression(preflight) or ""
+    if "always()" not in preflight_if or (
+        "github.event_name == 'workflow_dispatch'" not in preflight_if
+    ):
+        errors.append(
+            f"{path}: manual preflight result job is not an always-run manual gate"
+        )
+    if not any("preflight_gate.py" in step.text for step in preflight.steps):
+        errors.append(
+            f"{path}: manual preflight result job does not execute preflight_gate.py"
+        )
+    if any(is_personal_mutation(step) for step in preflight.steps):
+        errors.append(f"{path}: manual preflight result job performs a mutation")
+
+
 def validate_publish_workflow(
     path: pathlib.Path,
     text: str,
@@ -462,6 +513,16 @@ def validate_repository(root: pathlib.Path) -> list[str]:
             errors.append(f"{build_path}: {exc}")
     else:
         errors.append(f"{build_path}: required workflow is missing")
+    main_canary_path = root / ".github" / "workflows" / "personal-main-canary.yml"
+    if "personal-main-canary.yml" in parsed:
+        validate_main_canary_workflow(
+            main_canary_path,
+            main_canary_path.read_text(encoding="utf-8"),
+            parsed["personal-main-canary.yml"],
+            errors,
+        )
+    else:
+        errors.append(f"{main_canary_path}: required workflow is missing")
     publish_path = root / ".github" / "workflows" / "personal-publish.yml"
     if "personal-publish.yml" in parsed:
         validate_publish_workflow(

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --test structured_output.test.mjs && node run_agent.mjs --self-check"
+    "check": "node --test structured_output.test.mjs resolver_validation.test.mjs && node run_agent.mjs --self-check"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.83.0"

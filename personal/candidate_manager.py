@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import pathlib
@@ -40,6 +41,75 @@ def list_lines(value: str) -> list[str]:
     return [line for line in value.splitlines() if line]
 
 
+def normalized_commit_graph(
+    repo: pathlib.Path,
+    *,
+    boundary: str,
+    head: str,
+) -> dict[str, Any]:
+    commit_hashes = list_lines(
+        git_output(
+            repo,
+            "rev-list",
+            "--topo-order",
+            "--reverse",
+            f"{boundary}..{head}",
+        )
+    )
+    commit_set = set(commit_hashes)
+    signatures: dict[str, str] = {}
+    subjects: dict[str, str] = {}
+    commits: list[dict[str, str]] = []
+    description: list[dict[str, Any]] = []
+
+    for commit_hash in commit_hashes:
+        raw = git_output(repo, "show", "-s", "--format=%s%x00%P", commit_hash)
+        subject, raw_parents = raw.split("\x00", 1)
+        parents = raw_parents.split() if raw_parents else []
+        parent_signatures: list[str] = []
+        parent_subjects: list[str] = []
+        for parent in parents:
+            if parent not in commit_set:
+                parent_signatures.append("BASE")
+                parent_subjects.append("<base>")
+                continue
+            if parent not in signatures:
+                raise ControlError(
+                    "could not normalize personal commit graph in parent-before-child order"
+                )
+            parent_signatures.append(signatures[parent])
+            parent_subjects.append(subjects[parent])
+
+        payload = json.dumps(
+            {
+                "subject": subject,
+                "parents": parent_signatures,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        signatures[commit_hash] = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        subjects[commit_hash] = subject
+        commits.append({"hash": commit_hash, "subject": subject})
+        description.append({"subject": subject, "parents": parent_subjects})
+
+    return {
+        "head_signature": signatures.get(head),
+        "node_signatures": sorted(signatures.values()),
+        "description": sorted(
+            description,
+            key=lambda entry: json.dumps(
+                entry,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            ),
+        ),
+        "commits": commits,
+    }
+
+
 def make_baseline(
     repo: pathlib.Path,
     *,
@@ -72,21 +142,14 @@ def make_baseline(
             f"{target_ref} does not descend from {current_base_ref}; "
             "refusing to replay personal commits across rewritten history"
         )
-    commit_lines = list_lines(
-        git_output(
-            repo,
-            "log",
-            "--reverse",
-            "--format=%H%x09%s",
-            f"{current_base_commit}..{source_commit}",
-        )
+    personal_history = normalized_commit_graph(
+        repo,
+        boundary=current_base_commit,
+        head=source_commit,
     )
-    if not commit_lines:
+    commits = personal_history.pop("commits")
+    if not commits:
         raise ControlError("personal source branch contains no commits above its stable base")
-    commits = []
-    for line in commit_lines:
-        commit_hash, subject = line.split("\t", 1)
-        commits.append({"hash": commit_hash, "subject": subject})
     changed_files = sorted(
         set(list_lines(git_output(repo, "diff", "--name-only", current_base_commit, source_commit)))
     )
@@ -97,7 +160,7 @@ def make_baseline(
         and git(repo, "cat-file", "-e", f"{source_commit}:{path}", check=False).returncode == 0
     ]
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "created_at": utc_now(),
         "source_ref": source_ref,
         "source_commit": source_commit,
@@ -107,6 +170,7 @@ def make_baseline(
         "target_commit": target_commit,
         "candidate_branch": candidate_branch,
         "personal_commits": commits,
+        "personal_history": personal_history,
         "personal_changed_files": changed_files,
         "personal_test_files": test_files,
     }
@@ -222,14 +286,19 @@ def verify_candidate(
     if git(repo, "merge-base", "--is-ancestor", target, head, check=False).returncode != 0:
         reasons.append("target release is not an ancestor of the candidate")
 
-    expected_subjects = [entry["subject"] for entry in baseline["personal_commits"]]
-    actual_subjects = list_lines(
-        git_output(repo, "log", "--reverse", "--format=%s", f"{target}..{head}")
-    )
-    if actual_subjects != expected_subjects:
+    actual_history = normalized_commit_graph(repo, boundary=target, head=head)
+    actual_commits = actual_history.pop("commits")
+    expected_history = baseline.get("personal_history")
+    if not isinstance(expected_history, dict):
+        reasons.append("baseline is missing the normalized personal commit graph")
+    elif (
+        actual_history["head_signature"] != expected_history.get("head_signature")
+        or actual_history["node_signatures"] != expected_history.get("node_signatures")
+    ):
         reasons.append(
-            "personal commit sequence changed "
-            f"(expected {expected_subjects!r}, found {actual_subjects!r})"
+            "personal commit graph changed "
+            f"(expected {expected_history.get('description')!r}, "
+            f"found {actual_history['description']!r})"
         )
 
     missing_tests = [
@@ -262,7 +331,7 @@ def verify_candidate(
         "verified": not reasons,
         "candidate_commit": head,
         "target_commit": target,
-        "personal_commit_count": len(actual_subjects),
+        "personal_commit_count": len(actual_commits),
         "candidate_changed_files": candidate_files,
         "reasons": reasons,
     }

@@ -334,6 +334,39 @@ jobs:
             --output "$RUNNER_TEMP/verification.json" \
             --bundle "$RUNNER_TEMP/candidate-resolved.bundle"
 
+      - name: Capture failed resolver candidate
+        if: ${{ failure() }}
+        run: |
+          set -euo pipefail
+          diagnostics="$RUNNER_TEMP/resolver-failure"
+          mkdir -p "$diagnostics"
+          git -C source status --short --branch > "$diagnostics/status.txt"
+          git -C source log \
+            --graph \
+            --date=iso-strict \
+            --format='%H%x09%P%x09%cd%x09%s' \
+            --max-count=100 \
+            HEAD > "$diagnostics/history.txt"
+          git -C source diff HEAD --binary > "$diagnostics/workspace.diff"
+          git -C source bundle create "$diagnostics/candidate-head.bundle" HEAD
+          cp "$RUNNER_TEMP/resolver-baseline.json" "$diagnostics/baseline.json"
+          cp "$RUNNER_TEMP/resolver-conflict.json" "$diagnostics/conflict.json"
+          if [[ -f "$RUNNER_TEMP/resolver-output.json" ]]; then
+            cp "$RUNNER_TEMP/resolver-output.json" "$diagnostics/resolver-output.json"
+          fi
+          if [[ -f "$RUNNER_TEMP/verification.json" ]]; then
+            cp "$RUNNER_TEMP/verification.json" "$diagnostics/verification.json"
+          fi
+
+      - name: Upload failed resolver candidate
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: main-resolver-failure-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/resolver-failure
+          if-no-files-found: error
+          retention-days: 3
+
       - name: Upload resolved candidate for independent review
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -427,8 +460,47 @@ jobs:
             --reviewer "$RUNNER_TEMP/reviewer-output.json" \
             --output "$RUNNER_TEMP/review-gate.json"
 
+  preflight:
+    if: ${{ always() && github.event_name == 'workflow_dispatch' }}
+    needs: [observe, prepare, resolve, review]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out trusted control plane
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+
+      - name: Apply fail-closed manual preflight gate
+        env:
+          APPROVED: ${{ needs.review.outputs.approved }}
+          CANDIDATE_STATUS: ${{ needs.prepare.outputs.status }}
+          OBSERVE_RESULT: ${{ needs.observe.result }}
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          READY: ${{ needs.observe.outputs.ready }}
+          RESOLVE_RESULT: ${{ needs.resolve.result }}
+          REVIEW_RESULT: ${{ needs.review.result }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Manual main-canary preflight"
+            echo ""
+            python3 control/personal/preflight_gate.py \
+              --observe-result "$OBSERVE_RESULT" \
+              --ready "$READY" \
+              --prepare-result "$PREPARE_RESULT" \
+              --candidate-status "$CANDIDATE_STATUS" \
+              --resolve-result "$RESOLVE_RESULT" \
+              --review-result "$REVIEW_RESULT" \
+              --approved "$APPROVED"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
   dispatch:
-    if: ${{ always() && needs.observe.result == 'success' && needs.observe.outputs.ready == 'true' && needs.prepare.result == 'success' && (needs.prepare.outputs.status == 'clean' || (needs.resolve.result == 'success' && needs.review.outputs.approved == 'true')) }}
+    if: ${{ always() && github.event_name == 'schedule' && needs.observe.result == 'success' && needs.observe.outputs.ready == 'true' && needs.prepare.result == 'success' && (needs.prepare.outputs.status == 'clean' || (needs.resolve.result == 'success' && needs.review.outputs.approved == 'true')) }}
     needs: [observe, prepare, resolve, review]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -508,7 +580,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   report-blocked:
-    if: ${{ always() && (needs.observe.result == 'failure' || (needs.observe.outputs.ready == 'true' && needs.dispatch.result != 'success')) }}
+    if: ${{ always() && github.event_name == 'schedule' && (needs.observe.result == 'failure' || (needs.observe.outputs.ready == 'true' && needs.dispatch.result != 'success')) }}
     needs: [observe, prepare, resolve, review, dispatch]
     runs-on: ubuntu-24.04
     permissions:
