@@ -102,3 +102,31 @@ test("does not turn validator infrastructure errors into model retries", async (
 
   assert.equal(turns, 1);
 });
+
+test("uses validator-supplied instructions for a semantic repair", async () => {
+  const prompts = [];
+
+  const result = await collectValidatedStructuredOutput({
+    ...OPTIONS,
+    runTurn: async (prompt) => {
+      prompts.push(prompt);
+      return prompts.length === 1 ? "resolved report" : "repaired report";
+    },
+    validate: async (candidate) =>
+      candidate === "repaired report"
+        ? { ok: true, value: "repaired report\n" }
+        : {
+            ok: false,
+            error: "candidate verification failed: personal commit graph changed",
+            correctionScope:
+              "Repair the candidate Git state as well as its machine-readable handoff.",
+            correctionInstruction:
+              "Continue the rebase safely, rerun checks, and rewrite the resolver report.",
+          },
+  });
+
+  assert.equal(result.value, "repaired report\n");
+  assert.match(prompts[1], /Repair the candidate Git state/);
+  assert.match(prompts[1], /Continue the rebase safely/);
+  assert.doesNotMatch(prompts[1], /Correct only the machine-readable handoff/);
+});

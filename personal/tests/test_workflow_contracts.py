@@ -116,6 +116,53 @@ jobs:
         repository = pathlib.Path(__file__).resolve().parents[2]
         self.assertEqual(validate_repository(repository), [])
 
+    def test_rejects_a_manual_canary_without_a_non_mutating_terminal_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = pathlib.Path(temporary)
+            workflow_root = repository / ".github" / "workflows"
+            workflow_root.mkdir(parents=True)
+            (workflow_root / "personal-main-canary.yml").write_text(
+                """\
+name: Unsafe manual canary
+on:
+  workflow_dispatch:
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+  prepare:
+    needs: observe
+    runs-on: ubuntu-24.04
+  resolve:
+    needs: [observe, prepare]
+    runs-on: ubuntu-24.04
+  review:
+    needs: [observe, prepare, resolve]
+    runs-on: ubuntu-24.04
+  dispatch:
+    needs: [observe, prepare, resolve, review]
+    runs-on: ubuntu-24.04
+  report-blocked:
+    needs: [observe, prepare, resolve, review, dispatch]
+    runs-on: ubuntu-24.04
+""",
+                encoding="utf-8",
+            )
+
+            errors = validate_repository(repository)
+
+        self.assertTrue(
+            any("manual runs can reach candidate dispatch" in error for error in errors),
+            errors,
+        )
+        self.assertTrue(
+            any("manual runs can update the blocked issue" in error for error in errors),
+            errors,
+        )
+        self.assertTrue(
+            any("manual preflight result job" in error for error in errors),
+            errors,
+        )
+
     def test_yaml_extension_is_included_in_repository_validation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository = pathlib.Path(temporary)

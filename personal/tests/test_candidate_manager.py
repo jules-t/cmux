@@ -41,6 +41,25 @@ def write(path: pathlib.Path, value: str) -> None:
     path.write_text(value, encoding="utf-8")
 
 
+def commit_tree(
+    repo: pathlib.Path,
+    *,
+    tree: str,
+    parent: str,
+    subject: str,
+) -> str:
+    result = subprocess.run(
+        ["git", "commit-tree", tree, "-p", parent],
+        cwd=repo,
+        check=True,
+        text=True,
+        input=f"{subject}\n",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    return result.stdout.strip()
+
+
 class CandidateManagerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -203,6 +222,128 @@ class CandidateManagerTests(unittest.TestCase):
         )
         self.assertTrue((self.repo / "line-numbers.txt").exists())
         self.assertTrue((self.repo / "indent-guides.txt").exists())
+
+    def test_conflict_resolution_rejects_a_linearized_personal_history(self) -> None:
+        command(self.repo, "switch", "personal/stable")
+        write(self.repo / "feature.txt", "personal find routing\n")
+        command(self.repo, "add", "feature.txt")
+        command(self.repo, "commit", "-m", "personal find routing")
+        shared_personal_root = command(self.repo, "rev-parse", "HEAD")
+
+        command(
+            self.repo,
+            "switch",
+            "-c",
+            "conflict-line-numbers",
+            shared_personal_root,
+        )
+        write(self.repo / "line-numbers.txt", "line numbers\n")
+        command(self.repo, "add", "line-numbers.txt")
+        command(self.repo, "commit", "-m", "personal line numbers")
+
+        command(
+            self.repo,
+            "switch",
+            "-c",
+            "conflict-indent-guides",
+            shared_personal_root,
+        )
+        write(self.repo / "indent-guides.txt", "indent guides\n")
+        command(self.repo, "add", "indent-guides.txt")
+        command(self.repo, "commit", "-m", "personal indent guides")
+
+        command(self.repo, "switch", "personal/stable")
+        command(
+            self.repo,
+            "merge",
+            "--no-ff",
+            "conflict-line-numbers",
+            "-m",
+            "merge personal line numbers",
+        )
+        command(
+            self.repo,
+            "merge",
+            "--no-ff",
+            "conflict-indent-guides",
+            "-m",
+            "merge personal indent guides",
+        )
+
+        command(self.repo, "switch", "main")
+        write(self.repo / "feature.txt", "upstream editor routing\n")
+        command(self.repo, "add", "feature.txt")
+        command(self.repo, "commit", "-m", "upstream editor routing")
+        command(self.repo, "tag", "-f", "v1.0.1")
+
+        baseline = make_baseline(
+            self.repo,
+            source_ref="personal/stable",
+            current_base_ref="v1.0.0",
+            target_ref="v1.0.1",
+            candidate_branch="candidate/personal-v1.0.1",
+            policy=POLICY,
+        )
+        result = rebase_candidate(self.repo, baseline, POLICY, leave_conflicts=True)
+        self.assertEqual(result["status"], "conflict")
+        self.assertEqual(result["conflicted_paths"], ["feature.txt"])
+
+        write(
+            self.repo / "feature.txt",
+            "upstream editor routing\npersonal find routing\n",
+        )
+        command(self.repo, "add", "feature.txt")
+        command(self.repo, "-c", "core.editor=true", "rebase", "--continue")
+
+        verification = verify_candidate(self.repo, baseline=baseline, policy=POLICY)
+        self.assertTrue(verification["verified"])
+        self.assertEqual(
+            command(
+                self.repo,
+                "rev-list",
+                "--count",
+                "--merges",
+                f"{baseline['target_commit']}..HEAD",
+            ),
+            "2",
+        )
+        correct_tree = command(self.repo, "rev-parse", "HEAD^{tree}")
+
+        expected_subjects = [entry["subject"] for entry in baseline["personal_commits"]]
+        parent = baseline["target_commit"]
+        target_tree = command(self.repo, "rev-parse", f"{parent}^{{tree}}")
+        for index, subject in enumerate(expected_subjects):
+            parent = commit_tree(
+                self.repo,
+                tree=correct_tree if index == len(expected_subjects) - 1 else target_tree,
+                parent=parent,
+                subject=subject,
+            )
+        command(self.repo, "switch", "--detach", parent)
+
+        self.assertEqual(
+            command(
+                self.repo,
+                "log",
+                "--reverse",
+                "--format=%s",
+                f"{baseline['target_commit']}..HEAD",
+            ).splitlines(),
+            expected_subjects,
+        )
+        self.assertEqual(command(self.repo, "rev-parse", "HEAD^{tree}"), correct_tree)
+        self.assertEqual(
+            command(
+                self.repo,
+                "rev-list",
+                "--count",
+                "--merges",
+                f"{baseline['target_commit']}..HEAD",
+            ),
+            "0",
+        )
+        with self.assertRaisesRegex(ControlError, "personal commit graph changed"):
+            verify_candidate(self.repo, baseline=baseline, policy=POLICY)
 
     def test_rejects_a_target_that_rewrites_the_recorded_upstream_base(self) -> None:
         command(self.repo, "switch", "--orphan", "rewritten")
