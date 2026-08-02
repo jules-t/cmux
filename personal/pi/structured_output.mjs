@@ -1,4 +1,6 @@
 export const DEFAULT_MAX_CORRECTIONS = 2;
+const DEFAULT_CORRECTION_SCOPE =
+  "Correct only the machine-readable handoff. Preserve your substantive findings and do not change a stop or failure conclusion merely to satisfy validation.";
 
 export class StructuredOutputValidationError extends Error {
   constructor(label, attempts, validatorError) {
@@ -22,13 +24,14 @@ function correctionPrompt({
   validatorError,
   correctionNumber,
   maxCorrections,
+  correctionScope,
   correctionInstruction,
 }) {
   return [
     `The trusted deterministic validator rejected your previous ${label}.`,
     `Validator error: ${compactValidatorError(validatorError)}`,
     `This is correction ${correctionNumber} of ${maxCorrections}.`,
-    "Correct only the machine-readable handoff. Preserve your substantive findings and do not change a stop or failure conclusion merely to satisfy validation.",
+    correctionScope,
     correctionInstruction,
     "Do not add Markdown fences or explanatory prose to the machine-readable output.",
   ].join("\n");
@@ -82,7 +85,16 @@ export async function collectValidatedStructuredOutput({
       validatorError: lastValidatorError,
       correctionNumber: attempt,
       maxCorrections,
-      correctionInstruction,
+      correctionScope:
+        typeof validation.correctionScope === "string" &&
+        validation.correctionScope.trim()
+          ? validation.correctionScope.trim()
+          : DEFAULT_CORRECTION_SCOPE,
+      correctionInstruction:
+        typeof validation.correctionInstruction === "string" &&
+        validation.correctionInstruction.trim()
+          ? validation.correctionInstruction.trim()
+          : correctionInstruction,
     });
   }
 

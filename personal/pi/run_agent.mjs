@@ -16,6 +16,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 import { collectValidatedStructuredOutput } from "./structured_output.mjs";
+import { validateResolverOutcome } from "./resolver_validation.mjs";
 
 const PROVIDER = "deepseek";
 const MODEL = "deepseek-v4-flash";
@@ -164,11 +165,12 @@ function validatorError(error) {
   return "validator rejected the output";
 }
 
-async function runPythonValidator(script, arguments_) {
+async function runPythonValidator(script, arguments_, options = {}) {
   try {
     await execFileAsync("python3", [script, ...arguments_], {
       encoding: "utf8",
       maxBuffer: 1024 * 1024,
+      ...options,
     });
     return { ok: true };
   } catch (error) {
@@ -217,7 +219,36 @@ async function validateResolverReport({ cwd, controlRoot, temporaryRoot }) {
 
   const value = await fs.readFile(destination, "utf8");
   await fs.writeFile(source, value, { encoding: "utf8", mode: 0o600 });
-  return { ok: true, value };
+  return validateResolverOutcome({
+    reportValidation: { ok: true, value },
+    verifyCandidate: async () => {
+      const verification = path.join(
+        temporaryRoot,
+        "candidate-verification.json",
+      );
+      await fs.rm(verification, { force: true });
+      return runPythonValidator(
+        path.join(controlRoot, "personal", "candidate_manager.py"),
+        [
+          "verify",
+          "--repo",
+          cwd,
+          "--policy",
+          path.join(cwd, "personal-conflict-policy.json"),
+          "--baseline",
+          path.join(cwd, "personal-conflict-baseline.json"),
+          "--output",
+          verification,
+        ],
+        {
+          env: {
+            ...process.env,
+            PYTHONPATH: controlRoot,
+          },
+        },
+      );
+    },
+  });
 }
 
 async function runAgentTurn(session, prompt) {
