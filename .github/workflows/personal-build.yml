@@ -91,7 +91,9 @@ jobs:
         with:
           ref: ${{ inputs.source_ref }}
           path: source
-          fetch-depth: 0
+          fetch-depth: 1
+          fetch-tags: false
+          filter: blob:none
           persist-credentials: false
 
       - name: Validate source and stable base
@@ -104,12 +106,15 @@ jobs:
         run: |
           set -euo pipefail
           source_sha="$(git rev-parse HEAD)"
+          git fetch --filter=blob:none --no-tags --unshallow origin "$source_sha"
+          git remote add upstream https://github.com/manaflow-ai/cmux.git
+          git fetch --filter=blob:none --no-tags --force upstream \
+            '+refs/tags/v*:refs/tags/v*'
           base_tag="$(git describe --tags --match 'v[0-9]*' --abbrev=0 HEAD)"
           if [[ -n "$EXPECTED_BASE_TAG" && "$base_tag" != "$EXPECTED_BASE_TAG" ]]; then
             echo "source base $base_tag does not match required $EXPECTED_BASE_TAG" >&2
             exit 1
           fi
-          git remote add upstream https://github.com/manaflow-ai/cmux.git
           git fetch --force upstream "refs/tags/${base_tag}:refs/tags/${base_tag}"
           git merge-base --is-ancestor "$base_tag" HEAD
           if [[ -n "$EXPECTED_UPSTREAM_MAIN_SHA" || -n "$RUNTIME_MANIFEST_ASSET" ]]; then
@@ -402,7 +407,7 @@ jobs:
       PERSONAL_FORK_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN }}
 
   report-failure:
-    if: ${{ always() && (needs.validate.result == 'failure' || needs.metadata.result == 'failure' || needs.preflight.result == 'failure' || needs.ghostty_helper.result == 'failure' || needs.build.result == 'failure' || needs.attest.result == 'failure' || needs.publish.result == 'failure') }}
+    if: ${{ always() && (needs.validate.result == 'failure' || needs.validate.result == 'cancelled' || needs.metadata.result == 'failure' || needs.metadata.result == 'cancelled' || needs.preflight.result == 'failure' || needs.preflight.result == 'cancelled' || needs.ghostty_helper.result == 'failure' || needs.ghostty_helper.result == 'cancelled' || needs.build.result == 'failure' || needs.build.result == 'cancelled' || needs.attest.result == 'failure' || needs.attest.result == 'cancelled' || needs.publish.result == 'failure' || needs.publish.result == 'cancelled') }}
     needs: [validate, metadata, preflight, ghostty_helper, build, attest, publish]
     runs-on: ubuntu-24.04
     permissions:

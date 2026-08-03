@@ -7,10 +7,12 @@ import unittest
 
 from personal.workflow_contracts import (
     parse_jobs,
+    validate_build_workflow,
     validate_external_action_pins,
     validate_publish_workflow,
     validate_repository,
     validate_token_contracts,
+    validate_update_workflow,
 )
 
 
@@ -214,6 +216,82 @@ jobs:
         validate_publish_workflow(path, text, parse_jobs(path, text), errors)
         self.assertTrue(any("atomic force-with-lease" in error for error in errors))
 
+    def test_build_metadata_rejects_an_all_refs_source_checkout(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        path = repository / ".github" / "workflows" / "personal-build.yml"
+        text = path.read_text(encoding="utf-8").replace(
+            "fetch-depth: 1\n          fetch-tags: false\n          filter: blob:none",
+            "fetch-depth: 0",
+            1,
+        )
+        errors: list[str] = []
+        validate_build_workflow(path, parse_jobs(path, text), errors)
+        self.assertTrue(any("blobless shallow fetch" in error for error in errors))
+
+    def test_build_metadata_requires_the_targeted_history_fetch(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        path = repository / ".github" / "workflows" / "personal-build.yml"
+        text = path.read_text(encoding="utf-8").replace(
+            'git fetch --filter=blob:none --no-tags --unshallow origin "$source_sha"',
+            "git fetch origin",
+            1,
+        )
+        errors: list[str] = []
+        validate_build_workflow(path, parse_jobs(path, text), errors)
+        self.assertTrue(any("immutable requested-source history" in error for error in errors))
+
+    def test_build_metadata_rejects_a_broad_origin_refspec(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        path = repository / ".github" / "workflows" / "personal-build.yml"
+        text = path.read_text(encoding="utf-8").replace(
+            'git fetch --filter=blob:none --no-tags --unshallow origin "$source_sha"',
+            "git fetch origin '+refs/heads/*:refs/remotes/origin/*'",
+            1,
+        )
+        errors: list[str] = []
+        validate_build_workflow(path, parse_jobs(path, text), errors)
+        self.assertTrue(any("must not fetch all branch" in error for error in errors))
+
+    def test_build_metadata_rejects_checkout_tag_fetching(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        path = repository / ".github" / "workflows" / "personal-build.yml"
+        text = path.read_text(encoding="utf-8").replace(
+            "fetch-tags: false",
+            "fetch-tags: true",
+            1,
+        )
+        errors: list[str] = []
+        validate_build_workflow(path, parse_jobs(path, text), errors)
+        self.assertTrue(any("blobless shallow fetch" in error for error in errors))
+
+    def test_build_failure_reporter_covers_failure_and_cancellation(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        path = repository / ".github" / "workflows" / "personal-build.yml"
+        original = path.read_text(encoding="utf-8")
+        for outcome in ("failure", "cancelled"):
+            with self.subTest(outcome=outcome):
+                text = original.replace(
+                    f" || needs.metadata.result == '{outcome}'",
+                    "",
+                    1,
+                )
+                errors: list[str] = []
+                validate_build_workflow(path, parse_jobs(path, text), errors)
+                self.assertTrue(
+                    any(
+                        f"ignores {outcome} of 'metadata'" in error
+                        for error in errors
+                    )
+                )
+
+    def test_build_failure_reporter_requires_always(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        path = repository / ".github" / "workflows" / "personal-build.yml"
+        text = path.read_text(encoding="utf-8").replace("always() && ", "", 1)
+        errors: list[str] = []
+        validate_build_workflow(path, parse_jobs(path, text), errors)
+        self.assertTrue(any("must run after failed dependencies" in error for error in errors))
+
     def test_daily_main_workflow_dispatches_only_the_gated_publishing_build(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]
         text = (
@@ -227,6 +305,23 @@ jobs:
         self.assertIn("-f publish_release=true", text)
         self.assertIn("gh attestation verify", text)
         self.assertIn("review-cmux-resolution.txt", text)
+
+    def test_stable_update_rejects_state_recording_after_build_dispatch(self) -> None:
+        text = """\
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Dispatch
+        run: |
+          gh workflow run personal-build.yml
+          python3 state_manager.py mark-attempt
+          push origin HEAD:personal-control
+"""
+        path = pathlib.Path("unsafe-update.yml")
+        errors: list[str] = []
+        validate_update_workflow(path, parse_jobs(path, text), errors)
+        self.assertTrue(any("record state before build dispatch" in error for error in errors))
 
     def test_conflict_resolvers_use_narrow_rebase_permissions(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]
