@@ -595,7 +595,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   report-blocked:
-    if: ${{ always() && github.event_name == 'schedule' && (needs.observe.result == 'failure' || (needs.observe.outputs.ready == 'true' && needs.dispatch.result != 'success')) }}
+    if: ${{ !cancelled() && needs.dispatch.result != 'cancelled' && github.event_name == 'schedule' && (needs.observe.result == 'failure' || (needs.observe.outputs.ready == 'true' && needs.dispatch.result != 'success')) }}
     needs: [observe, prepare, resolve, review, dispatch]
     runs-on: ubuntu-24.04
     permissions:
@@ -620,4 +620,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --assignee "$GITHUB_REPOSITORY_OWNER" \
             --title "cmux Personal daily main update requires attention" \
+            --dedupe-key "main-canary:${UPSTREAM_SHA:-unknown}" \
             --body "The daily upstream-main integration stopped before a verified build was dispatched (target: ${UPSTREAM_SHA:-unknown}). personal/stable, the published release, and the installed app were left unchanged. Review: ${RUN_URL}"

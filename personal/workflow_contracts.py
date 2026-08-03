@@ -339,6 +339,28 @@ def validate_target_history_checkouts(
             )
 
 
+def validate_blocked_reporters(
+    path: pathlib.Path, jobs: dict[str, Job], errors: list[str]
+) -> None:
+    job = jobs.get("report-blocked")
+    if job is None:
+        return
+    condition = job_if_expression(job) or ""
+    if "always()" in condition:
+        errors.append(
+            f"{path}: blocked reporter must not notify for runs cancelled by hand"
+        )
+    for required in ("!cancelled()", "needs.dispatch.result != 'cancelled'"):
+        if required not in condition:
+            errors.append(f"{path}: blocked reporter is missing {required}")
+    for step in job.steps:
+        if "report_issue.py" in step.text and "--dedupe-key" not in step.text:
+            errors.append(
+                f"{path}: {job.name!r}/{step.name!r} must suppress repeat "
+                "notifications with a dedupe key"
+            )
+
+
 def validate_build_workflow(
     path: pathlib.Path, jobs: dict[str, Job], errors: list[str]
 ) -> None:
@@ -649,6 +671,7 @@ def validate_repository(root: pathlib.Path) -> list[str]:
         validate_external_action_pins(path, text, errors)
         validate_token_contracts(path, text, jobs, errors)
         validate_target_history_checkouts(path, jobs, errors)
+        validate_blocked_reporters(path, jobs, errors)
         try:
             validate_artifacts(path, jobs, errors)
         except WorkflowContractError as exc:

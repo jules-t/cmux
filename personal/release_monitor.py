@@ -92,6 +92,11 @@ def github_tag_url(repository: str, tag: str) -> str:
     return f"https://api.github.com/repos/{repository}/releases/tags/{urllib.parse.quote(tag, safe='')}"
 
 
+def attempt_reached_dispatch(attempt: dict[str, Any]) -> bool:
+    run_id = attempt.get("workflow_run_id")
+    return run_id is not None and str(run_id).strip() != ""
+
+
 def observe(
     state: dict[str, Any],
     *,
@@ -133,6 +138,7 @@ def observe(
         already_attempted = (
             attempt.get("tag") == appcast.tag
             and not retry_attempt
+            and attempt_reached_dispatch(attempt)
             and pending.get("tag") == appcast.tag
             and int(pending.get("count", 0)) >= observations_required
         )
