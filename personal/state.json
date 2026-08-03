@@ -3,7 +3,13 @@
   "current_stable_tag": "v0.64.20",
   "last_promoted_personal_tag": "personal-v0.64.20-r4",
   "personal_stable_sha": "4831dc9b47fb6c888823bcb75975c6463025a93c",
-  "publication_claim": null,
+  "publication_claim": {
+    "base_tag": "v0.64.22",
+    "personal_tag": "personal-v0.64.22-r1",
+    "source_sha": "9cd858531eec6f1f114ad6f2037218dd39501302",
+    "workflow_run_id": "30808972629",
+    "claimed_at": "2026-08-03T12:53:51Z"
+  },
   "pending_observation": {
     "tag": "v0.64.22",
     "count": 3,
