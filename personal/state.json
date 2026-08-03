@@ -2,7 +2,7 @@
   "schema_version": 1,
   "current_stable_tag": "v0.64.20",
   "last_promoted_personal_tag": "personal-v0.64.20-r4",
-  "personal_stable_sha": "f04693403c94683445ab3b5df3645da33e1a36c8",
+  "personal_stable_sha": "4831dc9b47fb6c888823bcb75975c6463025a93c",
   "publication_claim": null,
   "pending_observation": {
     "tag": "v0.64.21",

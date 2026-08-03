@@ -426,13 +426,6 @@ jobs:
             --candidate-branch "$CANDIDATE_BRANCH" \
             --expected-commit "$candidate_sha" \
             --github-auth
-          gh workflow run personal-build.yml \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref personal-control \
-            -f source_ref="$CANDIDATE_BRANCH" \
-            -f expected_base_tag="$TARGET_TAG" \
-            -f promote_source=true \
-            -f publish_release=true
           python3 control/personal/state_manager.py mark-attempt \
             --state state/personal/state.json \
             --tag "$TARGET_TAG" \
@@ -446,6 +439,13 @@ jobs:
             -c credential.helper= \
             -c 'credential.helper=!gh auth git-credential' \
             push origin HEAD:personal-control
+          gh workflow run personal-build.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref personal-control \
+            -f source_ref="$CANDIDATE_BRANCH" \
+            -f expected_base_tag="$TARGET_TAG" \
+            -f promote_source=true \
+            -f publish_release=true
 
   report-blocked:
     if: ${{ always() && (needs.monitor.result == 'failure' || (needs.monitor.outputs.ready == 'true' && needs.dispatch.result != 'success')) }}

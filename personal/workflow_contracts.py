@@ -289,6 +289,65 @@ def validate_build_workflow(
         return
     if jobs["preflight"].has_job_if:
         errors.append(f"{path}: preflight must run as a successful no-op when publishing is off")
+
+    metadata_checkout = next(
+        (
+            step
+            for step in jobs["metadata"].steps
+            if step.name == "Check out requested source"
+        ),
+        None,
+    )
+    if metadata_checkout is None:
+        errors.append(f"{path}: metadata has no requested-source checkout")
+    elif (
+        step_input(metadata_checkout, "fetch-depth") != "1"
+        or step_input(metadata_checkout, "fetch-tags") != "false"
+        or step_input(metadata_checkout, "filter") != "blob:none"
+    ):
+        errors.append(
+            f"{path}: metadata requested-source checkout must be a blobless shallow fetch"
+        )
+
+    metadata_validation = next(
+        (
+            step
+            for step in jobs["metadata"].steps
+            if step.name == "Validate source and stable base"
+        ),
+        None,
+    )
+    targeted_history_fetch = (
+        'git fetch --filter=blob:none --no-tags --unshallow origin "$source_sha"'
+    )
+    origin_fetches = [
+        line.strip()
+        for line in jobs["metadata"].text.splitlines()
+        if re.search(r"\bgit fetch\b.*\borigin(?:\s|$)", line)
+    ]
+    if (
+        metadata_validation is None
+        or targeted_history_fetch not in metadata_validation.text
+        or origin_fetches != [targeted_history_fetch]
+    ):
+        errors.append(
+            f"{path}: metadata must fetch only the immutable requested-source history"
+        )
+    if re.search(
+        r"refs/(?:heads|tags)/\*|\bgit fetch\b[^\n]*--all\b",
+        jobs["metadata"].text,
+    ):
+        errors.append(f"{path}: metadata must not fetch all branch or tag refs")
+
+    report_condition = job_if_expression(jobs["report-failure"]) or ""
+    if "always()" not in report_condition:
+        errors.append(f"{path}: failure reporter must run after failed dependencies")
+    for job_name in required - {"report-failure"}:
+        for outcome in ("failure", "cancelled"):
+            if f"needs.{job_name}.result == '{outcome}'" not in report_condition:
+                errors.append(
+                    f"{path}: failure reporter ignores {outcome} of {job_name!r}"
+                )
     for job in jobs.values():
         if job.runner and "macos-" in job.runner:
             lineage = ancestors(job.name, jobs)
@@ -352,6 +411,33 @@ def validate_main_canary_workflow(
         )
     if any(is_personal_mutation(step) for step in preflight.steps):
         errors.append(f"{path}: manual preflight result job performs a mutation")
+
+
+def validate_update_workflow(
+    path: pathlib.Path, jobs: dict[str, Job], errors: list[str]
+) -> None:
+    dispatch = jobs.get("dispatch")
+    if dispatch is None:
+        errors.append(f"{path}: stable update workflow has no dispatch job")
+        return
+    dispatch_step = next(
+        (
+            step
+            for step in dispatch.steps
+            if "gh workflow run personal-build.yml" in step.text
+        ),
+        None,
+    )
+    if dispatch_step is None:
+        errors.append(f"{path}: stable update does not dispatch the personal build")
+        return
+    state_update = dispatch_step.text.find("state_manager.py mark-attempt")
+    state_push = dispatch_step.text.find("push origin HEAD:personal-control")
+    build_dispatch = dispatch_step.text.find("gh workflow run personal-build.yml")
+    if not 0 <= state_update < state_push < build_dispatch:
+        errors.append(
+            f"{path}: stable update must durably record state before build dispatch"
+        )
 
 
 def validate_publish_workflow(
@@ -523,6 +609,15 @@ def validate_repository(root: pathlib.Path) -> list[str]:
         )
     else:
         errors.append(f"{main_canary_path}: required workflow is missing")
+    update_path = root / ".github" / "workflows" / "personal-update.yml"
+    if "personal-update.yml" in parsed:
+        validate_update_workflow(
+            update_path,
+            parsed["personal-update.yml"],
+            errors,
+        )
+    else:
+        errors.append(f"{update_path}: required stable update workflow is missing")
     publish_path = root / ".github" / "workflows" / "personal-publish.yml"
     if "personal-publish.yml" in parsed:
         validate_publish_workflow(
