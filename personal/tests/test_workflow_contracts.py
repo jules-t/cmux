@@ -353,6 +353,42 @@ jobs:
         validate_build_workflow(path, parse_jobs(path, text), errors)
         self.assertTrue(any("must run after failed dependencies" in error for error in errors))
 
+    def test_source_promotion_must_follow_publication(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        path = repository / ".github" / "workflows" / "personal-publish.yml"
+        original = path.read_text(encoding="utf-8")
+        publish_start = original.index("      - name: Publish verified draft release")
+        promote_start = original.index(
+            "      - name: Release the publication claim when nothing was exposed"
+        )
+        record_start = original.index("      - name: Record verified publication state")
+        text = (
+            original[:publish_start]
+            + original[promote_start:record_start]
+            + original[publish_start:promote_start]
+            + original[record_start:]
+        )
+        errors: list[str] = []
+        validate_publish_workflow(path, text, parse_jobs(path, text), errors)
+        self.assertTrue(
+            any("must follow publication" in error for error in errors)
+        )
+
+    def test_recovery_must_release_its_claim_when_publication_fails(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        path = repository / ".github" / "workflows" / "personal-publish.yml"
+        original = path.read_text(encoding="utf-8")
+        start = original.index(
+            "      - name: Release the publication claim when nothing was exposed"
+        )
+        end = original.index("      - name: Observe personal/stable without moving it")
+        text = original[:start] + original[end:]
+        errors: list[str] = []
+        validate_publish_workflow(path, text, parse_jobs(path, text), errors)
+        self.assertTrue(
+            any("release its publication claim" in error for error in errors)
+        )
+
     def test_build_must_rehearse_publication_before_macos_time(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]
         path = repository / ".github" / "workflows" / "personal-build.yml"

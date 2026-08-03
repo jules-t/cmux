@@ -8,6 +8,7 @@ from personal.common import ControlError
 from personal.state_manager import (
     claim_publication,
     finalize_publication,
+    release_publication_claim,
     validate_promotion,
 )
 
@@ -155,6 +156,63 @@ class StateManagerTests(unittest.TestCase):
         claim(state)
         with self.assertRaisesRegex(ControlError, "belongs to workflow run 123"):
             claim(state, run_id="456")
+
+    def test_releasing_a_claim_clears_it_for_the_next_attempt(self) -> None:
+        state = initial_state()
+        claim(state)
+        self.assertTrue(
+            release_publication_claim(
+                state,
+                base_tag="v0.64.20",
+                personal_tag="personal-v0.64.20-r1",
+                source_sha=SOURCE_A,
+                run_id="123",
+            )
+        )
+        self.assertIsNone(state["publication_claim"])
+        claim(state, run_id="456")
+        self.assertEqual(
+            state["publication_claim"]["workflow_run_id"],  # type: ignore[index]
+            "456",
+        )
+
+    def test_releasing_reports_when_no_claim_was_held(self) -> None:
+        state = initial_state()
+        self.assertFalse(
+            release_publication_claim(
+                state,
+                base_tag="v0.64.20",
+                personal_tag="personal-v0.64.20-r1",
+                source_sha=SOURCE_A,
+                run_id="123",
+            )
+        )
+
+    def test_a_run_cannot_release_another_runs_claim(self) -> None:
+        state = initial_state()
+        claim(state)
+        with self.assertRaisesRegex(ControlError, "belongs to workflow run 123"):
+            release_publication_claim(
+                state,
+                base_tag="v0.64.20",
+                personal_tag="personal-v0.64.20-r1",
+                source_sha=SOURCE_A,
+                run_id="456",
+            )
+        self.assertIsNotNone(state["publication_claim"])
+
+    def test_a_run_cannot_release_a_claim_for_another_release(self) -> None:
+        state = initial_state()
+        claim(state)
+        with self.assertRaisesRegex(ControlError, "does not belong to"):
+            release_publication_claim(
+                state,
+                base_tag="v0.64.20",
+                personal_tag="personal-v0.64.20-r2",
+                source_sha=SOURCE_B,
+                run_id="123",
+            )
+        self.assertIsNotNone(state["publication_claim"])
 
     def test_newer_claim_supersedes_an_unfinished_older_claim(self) -> None:
         state = initial_state()
