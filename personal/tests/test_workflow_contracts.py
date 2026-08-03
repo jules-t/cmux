@@ -7,6 +7,7 @@ import unittest
 
 from personal.workflow_contracts import (
     parse_jobs,
+    validate_blocked_reporters,
     validate_build_workflow,
     validate_external_action_pins,
     validate_publish_workflow,
@@ -348,6 +349,39 @@ jobs:
         errors: list[str] = []
         validate_build_workflow(path, parse_jobs(path, text), errors)
         self.assertTrue(any("must run after failed dependencies" in error for error in errors))
+
+    def test_blocked_reporter_rejects_notifying_for_cancelled_runs(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        for name in ("personal-update.yml", "personal-main-canary.yml"):
+            with self.subTest(workflow=name):
+                path = repository / ".github" / "workflows" / name
+                text = path.read_text(encoding="utf-8").replace(
+                    "!cancelled() && needs.dispatch.result != 'cancelled' && ",
+                    "always() && ",
+                    1,
+                )
+                errors: list[str] = []
+                validate_blocked_reporters(path, parse_jobs(path, text), errors)
+                self.assertTrue(
+                    any("cancelled by hand" in error for error in errors)
+                )
+
+    def test_blocked_reporter_requires_a_dedupe_key(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        for name, key in (
+            ("personal-update.yml", 'automatic-update:${TARGET_TAG:-unknown}'),
+            ("personal-main-canary.yml", 'main-canary:${UPSTREAM_SHA:-unknown}'),
+        ):
+            with self.subTest(workflow=name):
+                path = repository / ".github" / "workflows" / name
+                text = path.read_text(encoding="utf-8").replace(
+                    f'            --dedupe-key "{key}" \\\n',
+                    "",
+                    1,
+                )
+                errors: list[str] = []
+                validate_blocked_reporters(path, parse_jobs(path, text), errors)
+                self.assertTrue(any("dedupe key" in error for error in errors))
 
     def test_daily_main_workflow_dispatches_only_the_gated_publishing_build(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]

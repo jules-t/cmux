@@ -458,7 +458,7 @@ jobs:
             -f publish_release=true
 
   report-blocked:
-    if: ${{ always() && (needs.monitor.result == 'failure' || (needs.monitor.outputs.ready == 'true' && needs.dispatch.result != 'success')) }}
+    if: ${{ !cancelled() && needs.dispatch.result != 'cancelled' && (needs.monitor.result == 'failure' || (needs.monitor.outputs.ready == 'true' && needs.dispatch.result != 'success')) }}
     needs: [monitor, prepare, resolve, review, dispatch]
     runs-on: ubuntu-24.04
     permissions:
@@ -483,4 +483,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --assignee "$GITHUB_REPOSITORY_OWNER" \
             --title "cmux Personal automatic update requires attention" \
+            --dedupe-key "automatic-update:${TARGET_TAG:-unknown}" \
             --body "The release monitor or automatic update stopped before completion (target: ${TARGET_TAG:-unknown}). No failed or unverified app was exposed to the local updater. This happens for source mismatches, protected/functional conflicts, low-confidence review, a missing DEEPSEEK_API_KEY, or a failed gate. Review: ${RUN_URL}"

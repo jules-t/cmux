@@ -91,6 +91,32 @@ class ReleaseMonitorTests(unittest.TestCase):
         )
         self.assertEqual(state, prior)
 
+    def test_retries_an_attempt_that_never_reached_dispatch(self) -> None:
+        state = seeded_state()
+        state["pending_observation"] = {
+            "tag": "v0.64.21",
+            "count": 2,
+            "first_seen_at": "2026-07-24T10:00:00Z",
+            "last_seen_at": "2026-07-24T16:00:00Z",
+        }
+        state["attempt"] = {
+            "tag": "v0.64.21",
+            "status": "queued",
+            "workflow_run_id": None,
+            "updated_at": "2026-07-24T16:01:00Z",
+        }
+        published = PublishedRelease("v0.64.21", "101", None)
+        state, result = observe(
+            state,
+            appcast=published,
+            github=published,
+            observations_required=2,
+            checked_at="2026-07-24T22:00:00Z",
+        )
+        self.assertEqual(result["status"], "ready")
+        self.assertTrue(result["ready"])
+        self.assertEqual(state["attempt"]["tag"], "v0.64.21")
+
     def test_blocks_mismatched_sources(self) -> None:
         state = seeded_state()
         _, result = observe(
