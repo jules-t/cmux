@@ -14,6 +14,17 @@ RUNNER_RE = re.compile(r"^    runs-on:\s*(.+?)\s*$", re.MULTILINE)
 JOB_IF_RE = re.compile(r"^    if:\s*(.+?)\s*$", re.MULTILINE)
 USES_RE = re.compile(r"^\s+(?:-\s+)?uses:\s*([^#\s]+)", re.MULTILINE)
 PERSONAL_TOKEN = "${{ secrets.PERSONAL_FORK_TOKEN }}"
+CHANNEL_ARGUMENT = "--upstream-main-sha"
+SUBPARSER_RE = re.compile(
+    r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*subparsers\.add_parser\(\s*\n?\s*"
+    r"[\"']([A-Za-z0-9_-]+)[\"']",
+    re.MULTILINE,
+)
+CHANNEL_ARGUMENT_RE = re.compile(
+    r"^\s*([A-Za-z_][A-Za-z0-9_]*)\.add_argument\(\s*\n?\s*"
+    rf"[\"']{re.escape(CHANNEL_ARGUMENT)}[\"']",
+    re.MULTILINE,
+)
 MUTATION_MARKERS = (
     r"release_publisher\.py\s+(?:reserve|ensure-reservation|publish)",
     r"state_manager\.py\s+(?:claim-publication|finalize-publication)",
@@ -337,6 +348,77 @@ def validate_target_history_checkouts(
                 f"{path}: {job_name!r}/{checkout.name!r} is not followed by "
                 "an immutable target-history fetch"
             )
+
+
+def channel_aware_commands(root: pathlib.Path) -> frozenset[str]:
+    commands: set[str] = set()
+    for script in sorted((root / "personal").glob("*.py")):
+        text = script.read_text(encoding="utf-8")
+        holders = set(CHANNEL_ARGUMENT_RE.findall(text))
+        if not holders:
+            continue
+        subcommands = dict(SUBPARSER_RE.findall(text))
+        for holder in holders:
+            if holder in subcommands:
+                commands.add(f"{script.name} {subcommands[holder]}")
+            else:
+                commands.add(script.name)
+    return frozenset(commands)
+
+
+def validate_channel_identity_forwarding(
+    root: pathlib.Path,
+    path: pathlib.Path,
+    jobs: dict[str, Job],
+    errors: list[str],
+) -> None:
+    commands = channel_aware_commands(root)
+    if not commands:
+        errors.append(
+            f"{root}: no control-plane command accepts {CHANNEL_ARGUMENT}"
+        )
+        return
+    for job in jobs.values():
+        for step in job.steps:
+            if CHANNEL_ARGUMENT in step.text:
+                continue
+            for command in sorted(commands):
+                if command in step.text:
+                    errors.append(
+                        f"{path}: {job.name!r}/{step.name!r} runs {command} without "
+                        f"forwarding {CHANNEL_ARGUMENT}, so a nightly build would be "
+                        "judged as a stable one"
+                    )
+
+
+def logical_shell_commands(text: str) -> list[str]:
+    commands: list[str] = []
+    current: list[str] = []
+    for line in text.splitlines():
+        current.append(line)
+        if line.rstrip().endswith("\\"):
+            continue
+        commands.append("\n".join(current))
+        current = []
+    if current:
+        commands.append("\n".join(current))
+    return commands
+
+
+def validate_channel_script_forwarding(root: pathlib.Path, errors: list[str]) -> None:
+    commands = channel_aware_commands(root)
+    for script in sorted((root / "personal" / "ci").glob("*.sh")):
+        text = script.read_text(encoding="utf-8")
+        for invocation in logical_shell_commands(text):
+            if CHANNEL_ARGUMENT in invocation:
+                continue
+            for command in sorted(commands):
+                if command in invocation:
+                    errors.append(
+                        f"{script}: runs {command} without forwarding "
+                        f"{CHANNEL_ARGUMENT}, so a nightly build would be "
+                        "packaged as a stable one"
+                    )
 
 
 def validate_blocked_reporters(
@@ -672,10 +754,12 @@ def validate_repository(root: pathlib.Path) -> list[str]:
         validate_token_contracts(path, text, jobs, errors)
         validate_target_history_checkouts(path, jobs, errors)
         validate_blocked_reporters(path, jobs, errors)
+        validate_channel_identity_forwarding(root, path, jobs, errors)
         try:
             validate_artifacts(path, jobs, errors)
         except WorkflowContractError as exc:
             errors.append(f"{path}: {exc}")
+    validate_channel_script_forwarding(root, errors)
     build_path = root / ".github" / "workflows" / "personal-build.yml"
     if "personal-build.yml" in parsed:
         try:

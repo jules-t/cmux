@@ -6,9 +6,12 @@ import tempfile
 import unittest
 
 from personal.workflow_contracts import (
+    channel_aware_commands,
     parse_jobs,
     validate_blocked_reporters,
     validate_build_workflow,
+    validate_channel_identity_forwarding,
+    validate_channel_script_forwarding,
     validate_external_action_pins,
     validate_publish_workflow,
     validate_repository,
@@ -349,6 +352,60 @@ jobs:
         errors: list[str] = []
         validate_build_workflow(path, parse_jobs(path, text), errors)
         self.assertTrue(any("must run after failed dependencies" in error for error in errors))
+
+    def test_channel_aware_commands_are_discovered_from_their_parsers(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        commands = channel_aware_commands(repository)
+        self.assertIn("release_publisher.py publish", commands)
+        self.assertIn("state_manager.py finalize-publication", commands)
+        self.assertIn("verify_release_assets.py", commands)
+        self.assertNotIn("state_manager.py claim-publication", commands)
+
+    def test_publication_must_forward_the_release_channel(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        path = repository / ".github" / "workflows" / "personal-publish.yml"
+        original = path.read_text(encoding="utf-8")
+        for command in (
+            "release_publisher.py publish",
+            "state_manager.py finalize-publication",
+            "verify_release_assets.py",
+        ):
+            with self.subTest(command=command):
+                index = original.index(command)
+                tail = original.index('--upstream-main-sha "', index)
+                end = original.index("\n", tail)
+                text = original[:tail] + original[end + 1 :]
+                errors: list[str] = []
+                validate_channel_identity_forwarding(
+                    repository, path, parse_jobs(path, text), errors
+                )
+                self.assertTrue(
+                    any(command in error for error in errors),
+                    msg=f"dropping {command}'s channel argument was not detected",
+                )
+
+    def test_build_script_must_forward_the_release_channel(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        script = repository / "personal" / "ci" / "build_personal.sh"
+        original = script.read_text(encoding="utf-8")
+        patched = original.replace(
+            '  --upstream-main-sha "$UPSTREAM_MAIN_SHA" \\\n', "", 1
+        )
+        self.assertNotEqual(original, patched)
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            (root / "personal" / "ci").mkdir(parents=True)
+            for name in ("release_publisher.py", "package_bundle.py", "build_manifest.py"):
+                (root / "personal" / name).write_text(
+                    (repository / "personal" / name).read_text(encoding="utf-8"),
+                    encoding="utf-8",
+                )
+            (root / "personal" / "ci" / "build_personal.sh").write_text(
+                patched, encoding="utf-8"
+            )
+            errors: list[str] = []
+            validate_channel_script_forwarding(root, errors)
+        self.assertTrue(any("packaged as a stable one" in error for error in errors))
 
     def test_blocked_reporter_rejects_notifying_for_cancelled_runs(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]
