@@ -353,6 +353,20 @@ jobs:
         validate_build_workflow(path, parse_jobs(path, text), errors)
         self.assertTrue(any("must run after failed dependencies" in error for error in errors))
 
+    def test_build_must_rehearse_publication_before_macos_time(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        path = repository / ".github" / "workflows" / "personal-build.yml"
+        original = path.read_text(encoding="utf-8")
+        start = original.index("      - name: Rehearse publication")
+        end = original.index("  ghostty_helper:")
+        errors: list[str] = []
+        validate_build_workflow(
+            path, parse_jobs(path, original[:start] + original[end:]), errors
+        )
+        self.assertTrue(
+            any("rehearse publication" in error for error in errors)
+        )
+
     def test_channel_aware_commands_are_discovered_from_their_parsers(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]
         commands = channel_aware_commands(repository)

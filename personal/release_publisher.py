@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import calendar
 import hashlib
 import json
 import os
 import pathlib
 import re
 import subprocess
+import tempfile
 import time
 import urllib.parse
 from collections.abc import Iterable, Mapping
@@ -27,10 +29,17 @@ SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 GH_TIMEOUT_SECONDS = 300
 RELEASE_VISIBILITY_ATTEMPTS = 6
 RELEASE_VISIBILITY_DELAY_SECONDS = 2
+REHEARSAL_TAG_PREFIX = "personal-rehearsal-"
+REHEARSAL_RUN_ID_RE = re.compile(r"^[0-9]+$")
+REHEARSAL_MAX_AGE_SECONDS = 6 * 60 * 60
 
 
 def gh(*arguments: str) -> subprocess.CompletedProcess[str]:
     return run(["gh", *arguments], timeout=GH_TIMEOUT_SECONDS)
+
+
+def gh_allowing_failure(*arguments: str) -> subprocess.CompletedProcess[str]:
+    return run(["gh", *arguments], timeout=GH_TIMEOUT_SECONDS, check=False)
 
 
 def require_token() -> None:
@@ -543,6 +552,147 @@ def publish_release(
     return release
 
 
+def rehearsal_tag(run_id: str) -> str:
+    if not REHEARSAL_RUN_ID_RE.fullmatch(run_id):
+        raise ControlError(f"rehearsal run id must be numeric: {run_id!r}")
+    return f"{REHEARSAL_TAG_PREFIX}{run_id}"
+
+
+def is_rehearsal_tag(tag: Any) -> bool:
+    return isinstance(tag, str) and tag.startswith(REHEARSAL_TAG_PREFIX)
+
+
+def delete_rehearsal_release(repository: str, tag: str) -> None:
+    if not is_rehearsal_tag(tag):
+        raise ControlError(f"refusing to delete non-rehearsal release {tag!r}")
+    gh_allowing_failure(
+        "release",
+        "delete",
+        tag,
+        "--repo",
+        repository,
+        "--yes",
+        "--cleanup-tag",
+    )
+
+
+def release_age_seconds(release: Mapping[str, Any], *, now: float) -> float | None:
+    created_at = release.get("created_at")
+    if not isinstance(created_at, str):
+        return None
+    try:
+        created = time.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return None
+    return now - calendar.timegm(created)
+
+
+def sweep_stale_rehearsals(repository: str, *, keep_tag: str, now: float) -> list[str]:
+    swept: list[str] = []
+    for release in list_releases(repository):
+        tag = release.get("tag_name")
+        if not is_rehearsal_tag(tag) or tag == keep_tag:
+            continue
+        age = release_age_seconds(release, now=now)
+        if age is not None and age < REHEARSAL_MAX_AGE_SECONDS:
+            continue
+        delete_rehearsal_release(repository, str(tag))
+        swept.append(str(tag))
+    return swept
+
+
+def write_rehearsal_assets(
+    directory: pathlib.Path,
+    config: Mapping[str, Any],
+    *,
+    tag: str,
+) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path]:
+    archive_name = config.get("artifact_name")
+    manifest_name = config.get("manifest_name")
+    if not isinstance(archive_name, str) or not isinstance(manifest_name, str):
+        raise ControlError("release config has invalid asset names")
+    payload = f"cmux Personal publication rehearsal for {tag}\n"
+    (directory / archive_name).write_text(payload, encoding="utf-8")
+    (directory / f"{archive_name}.sha256").write_text(
+        f"{hashlib.sha256(payload.encode('utf-8')).hexdigest()}  {archive_name}\n",
+        encoding="utf-8",
+    )
+    (directory / manifest_name).write_text(
+        json.dumps({"rehearsal": True, "tag": tag}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return configured_asset_paths(directory, config)
+
+
+def rehearse_publication(
+    *,
+    repository: str,
+    config: Mapping[str, Any],
+    target_sha: str,
+    run_id: str,
+    run_url: str | None = None,
+) -> dict[str, Any]:
+    require_token()
+    repository = require_repository(repository)
+    target_sha = require_source_sha(target_sha)
+    tag = rehearsal_tag(run_id)
+
+    swept = sweep_stale_rehearsals(repository, keep_tag=tag, now=time.time())
+    delete_rehearsal_release(repository, tag)
+
+    with tempfile.TemporaryDirectory() as directory:
+        paths = write_rehearsal_assets(pathlib.Path(directory), config, tag=tag)
+        expected = expected_asset_metadata(paths)
+        try:
+            gh(
+                "release",
+                "create",
+                tag,
+                "--repo",
+                repository,
+                "--target",
+                target_sha,
+                "--title",
+                f"cmux Personal publication rehearsal {tag}",
+                "--notes",
+                "Disposable rehearsal of the publication path."
+                + (f" Run: {run_url}" if run_url else ""),
+                "--draft",
+            )
+            release = wait_for_release(repository, tag, expected_draft=True)
+            gh(
+                "release",
+                "upload",
+                tag,
+                *(str(path) for path in paths),
+                "--repo",
+                repository,
+                "--clobber",
+            )
+            release = find_release(repository, tag)
+            if release is None:
+                raise ControlError(f"rehearsal release {tag} disappeared after upload")
+            verify_remote_assets(repository, release, expected)
+            gh(
+                "release",
+                "edit",
+                tag,
+                "--repo",
+                repository,
+                "--draft=false",
+            )
+            release = wait_for_release(repository, tag, expected_draft=False)
+            verify_remote_assets(repository, release, expected)
+        finally:
+            delete_rehearsal_release(repository, tag)
+
+    return {
+        "tag": tag,
+        "swept_stale_rehearsals": swept,
+        "detail": "reservation, upload, digest verification, and exposure all succeeded",
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Reserve and publish verified cmux Personal GitHub releases."
@@ -574,6 +724,16 @@ def build_parser() -> argparse.ArgumentParser:
     publish.add_argument("--base-tag", required=True)
     publish.add_argument("--personal-tag", required=True)
     publish.add_argument("--upstream-main-sha", default="")
+
+    rehearse = subparsers.add_parser(
+        "rehearse",
+        help="exercise the publication path against a disposable scratch release",
+    )
+    rehearse.add_argument("--repo", required=True)
+    rehearse.add_argument("--config", required=True)
+    rehearse.add_argument("--target-sha", required=True)
+    rehearse.add_argument("--run-id", required=True)
+    rehearse.add_argument("--run-url")
     return parser
 
 
@@ -598,6 +758,18 @@ def main() -> int:
             run_url=args.run_url,
         )
         print(f"release reservation: {args.personal_tag} is exact and recoverable")
+        return 0
+    if args.command == "rehearse":
+        result = rehearse_publication(
+            repository=args.repo,
+            config=load_json(args.config),
+            target_sha=args.target_sha,
+            run_id=args.run_id,
+            run_url=args.run_url,
+        )
+        print(f"publication rehearsal: {result['detail']}")
+        for tag in result["swept_stale_rehearsals"]:
+            print(f"swept stale rehearsal release {tag}")
         return 0
     publish_release(
         repository=args.repo,
