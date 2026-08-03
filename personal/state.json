@@ -6,22 +6,22 @@
   "publication_claim": null,
   "pending_observation": {
     "tag": "v0.64.22",
-    "count": 1,
+    "count": 2,
     "first_seen_at": "2026-08-03T08:58:13Z",
-    "last_seen_at": "2026-08-03T08:58:13Z"
+    "last_seen_at": "2026-08-03T08:58:52Z"
   },
   "attempt": {
-    "tag": "v0.64.20",
-    "status": "promoted",
-    "workflow_run_id": "30549274344",
-    "updated_at": "2026-07-30T15:58:42Z"
+    "tag": "v0.64.22",
+    "status": "queued",
+    "workflow_run_id": null,
+    "updated_at": "2026-08-03T08:58:52Z"
   },
   "last_check": {
-    "status": "observing",
+    "status": "ready",
     "appcast_tag": "v0.64.22",
     "github_tag": "v0.64.22",
-    "checked_at": "2026-08-03T08:58:13Z",
-    "detail": "first stable observation for v0.64.22; 1 more check(s) required"
+    "checked_at": "2026-08-03T08:58:52Z",
+    "detail": "v0.64.22 was confirmed by 2 consecutive observations"
   },
   "last_published_base_tag": "v0.64.20",
   "last_promoted_source_sha": "f04693403c94683445ab3b5df3645da33e1a36c8",
