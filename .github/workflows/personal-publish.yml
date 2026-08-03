@@ -316,6 +316,71 @@ jobs:
             --base-tag "${{ steps.identity.outputs.base_tag }}" \
             --run-url "$BUILD_RUN_URL"
 
+      - name: Publish verified draft release
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN }}
+          PYTHONPATH: ${{ github.workspace }}/control
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "PERSONAL_FORK_TOKEN is required for publication" >&2
+            exit 1
+          fi
+          python3 control/personal/release_publisher.py publish \
+            --repo "$GITHUB_REPOSITORY" \
+            --directory dist \
+            --config control/personal/config.json \
+            --source-sha "${{ steps.identity.outputs.source_sha }}" \
+            --base-tag "${{ steps.identity.outputs.base_tag }}" \
+            --personal-tag "${{ steps.identity.outputs.personal_tag }}" \
+            --upstream-main-sha "${{ steps.identity.outputs.upstream_main_sha }}"
+
+      - name: Release the publication claim when nothing was exposed
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN }}
+          PYTHONPATH: ${{ github.workspace }}/control
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "PERSONAL_FORK_TOKEN is required to release the claim" >&2
+            exit 1
+          fi
+          git -C state config user.name "cmux Personal automation"
+          git -C state config user.email "actions@users.noreply.github.com"
+          claim_released=false
+          for attempt in 1 2 3 4 5; do
+            echo "claim release attempt ${attempt}/5"
+            git -C state fetch --no-tags origin \
+              '+refs/heads/personal-control:refs/remotes/origin/personal-control'
+            git -C state switch --detach refs/remotes/origin/personal-control
+            python3 control/personal/state_manager.py release-claim \
+              --state state/personal/state.json \
+              --base-tag "${{ steps.identity.outputs.base_tag }}" \
+              --personal-tag "${{ steps.identity.outputs.personal_tag }}" \
+              --source-sha "${{ steps.identity.outputs.source_sha }}" \
+              --run-id "${{ inputs.build_run_id }}"
+            git -C state add personal/state.json
+            if git -C state diff --cached --quiet; then
+              claim_released=true
+              break
+            fi
+            git -C state commit \
+              -m "chore(personal): release claim ${{ steps.identity.outputs.personal_tag }}"
+            if git -C state \
+                -c credential.helper= \
+                -c 'credential.helper=!gh auth git-credential' \
+                push origin HEAD:personal-control; then
+              claim_released=true
+              break
+            fi
+            echo "personal-control moved while releasing the claim; retrying" >&2
+          done
+          if [[ "$claim_released" != true ]]; then
+            echo "could not release the publication claim after five attempts" >&2
+            exit 1
+          fi
+
       - name: Observe personal/stable without moving it
         if: ${{ !inputs.promote_source }}
         id: observe_stable
@@ -385,25 +450,6 @@ jobs:
             exit 1
           fi
           echo "personal_stable_sha=$promoted_sha" >> "$GITHUB_OUTPUT"
-
-      - name: Publish verified draft release
-        env:
-          GH_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN }}
-          PYTHONPATH: ${{ github.workspace }}/control
-        run: |
-          set -euo pipefail
-          if [[ -z "${GH_TOKEN:-}" ]]; then
-            echo "PERSONAL_FORK_TOKEN is required for publication" >&2
-            exit 1
-          fi
-          python3 control/personal/release_publisher.py publish \
-            --repo "$GITHUB_REPOSITORY" \
-            --directory dist \
-            --config control/personal/config.json \
-            --source-sha "${{ steps.identity.outputs.source_sha }}" \
-            --base-tag "${{ steps.identity.outputs.base_tag }}" \
-            --personal-tag "${{ steps.identity.outputs.personal_tag }}" \
-            --upstream-main-sha "${{ steps.identity.outputs.upstream_main_sha }}"
 
       - name: Record verified publication state
         env:

@@ -688,6 +688,22 @@ def validate_publish_workflow(
         ),
         None,
     )
+    promotion = next(
+        (
+            index
+            for index, step in enumerate(steps)
+            if "--force-with-lease=" in step.text
+        ),
+        None,
+    )
+    claim_release = next(
+        (
+            index
+            for index, step in enumerate(steps)
+            if "state_manager.py release-claim" in step.text
+        ),
+        None,
+    )
     mutation_indexes = [
         index for index, step in enumerate(steps) if is_personal_mutation(step)
     ]
@@ -710,6 +726,31 @@ def validate_publish_workflow(
         if "push origin HEAD:personal-control" not in steps[claim].text:
             errors.append(
                 f"{path}: publication claim is not durably pushed before release exposure"
+            )
+    if promotion is None:
+        errors.append(f"{path}: recovery has no source promotion step")
+    elif publication is not None and promotion < publication:
+        errors.append(
+            f"{path}: source promotion must follow publication so a failed publish "
+            "cannot leave personal/stable moved"
+        )
+    if claim_release is None:
+        errors.append(
+            f"{path}: recovery must release its publication claim when publication fails"
+        )
+    else:
+        if "if: ${{ failure() }}" not in steps[claim_release].text:
+            errors.append(
+                f"{path}: the publication claim release must run only on failure"
+            )
+        if publication is not None and claim_release < publication:
+            errors.append(
+                f"{path}: the publication claim release must not precede publication"
+            )
+        if promotion is not None and claim_release > promotion:
+            errors.append(
+                f"{path}: the publication claim release must precede source promotion, "
+                "which runs only once the release is public"
             )
     if reservation is None:
         errors.append(

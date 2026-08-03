@@ -211,6 +211,35 @@ def claim_publication(
     }
 
 
+def release_publication_claim(
+    state: dict[str, Any],
+    *,
+    base_tag: str,
+    personal_tag: str,
+    source_sha: str,
+    run_id: str | None,
+) -> bool:
+    run_id = require_run_id(run_id, context="publication workflow run ID")
+    claim = claimed_identity(state)
+    if claim is None:
+        return False
+    if not identity_is_exact(
+        claim,
+        base_tag=base_tag,
+        personal_tag=personal_tag,
+        source_sha=source_sha,
+    ):
+        raise ControlError(
+            f"publication claim {claim[1]} does not belong to {personal_tag}"
+        )
+    if claim[3] != run_id:
+        raise ControlError(
+            f"publication claim for {personal_tag} belongs to workflow run {claim[3]}"
+        )
+    state["publication_claim"] = None
+    return True
+
+
 def finalize_publication(
     state: dict[str, Any],
     *,
@@ -329,6 +358,16 @@ def main() -> int:
     claim.add_argument("--source-sha", required=True)
     claim.add_argument("--run-id", required=True)
 
+    unclaim = subparsers.add_parser(
+        "release-claim",
+        help="release this run's publication claim after a failure before exposure",
+    )
+    unclaim.add_argument("--state", required=True)
+    unclaim.add_argument("--base-tag", required=True)
+    unclaim.add_argument("--personal-tag", required=True)
+    unclaim.add_argument("--source-sha", required=True)
+    unclaim.add_argument("--run-id", required=True)
+
     finalize = subparsers.add_parser("finalize-publication")
     finalize.add_argument("--state", required=True)
     finalize.add_argument("--base-tag", required=True)
@@ -366,6 +405,19 @@ def main() -> int:
             source_sha=args.source_sha,
             run_id=args.run_id,
             updated_at=now,
+        )
+    elif args.command == "release-claim":
+        released = release_publication_claim(
+            state,
+            base_tag=args.base_tag,
+            personal_tag=args.personal_tag,
+            source_sha=args.source_sha,
+            run_id=args.run_id,
+        )
+        print(
+            f"publication claim for {args.personal_tag} released"
+            if released
+            else f"no publication claim was held for {args.personal_tag}"
         )
     else:
         finalize_publication(
