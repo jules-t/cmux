@@ -1,26 +1,20 @@
 {
   "schema_version": 1,
-  "current_stable_tag": "v0.64.20",
-  "last_promoted_personal_tag": "personal-v0.64.20-r4",
-  "personal_stable_sha": "4831dc9b47fb6c888823bcb75975c6463025a93c",
-  "publication_claim": {
-    "base_tag": "v0.64.22",
-    "personal_tag": "personal-v0.64.22-r1",
-    "source_sha": "9cd858531eec6f1f114ad6f2037218dd39501302",
-    "workflow_run_id": "30808972629",
-    "claimed_at": "2026-08-03T12:53:51Z"
-  },
+  "current_stable_tag": "v0.64.22",
+  "last_promoted_personal_tag": "personal-v0.64.22-r1",
+  "personal_stable_sha": "9cd858531eec6f1f114ad6f2037218dd39501302",
+  "publication_claim": null,
   "pending_observation": {
-    "tag": "v0.64.22",
-    "count": 3,
-    "first_seen_at": "2026-08-03T08:58:13Z",
-    "last_seen_at": "2026-08-03T11:05:18Z"
+    "tag": null,
+    "count": 0,
+    "first_seen_at": null,
+    "last_seen_at": null
   },
   "attempt": {
     "tag": "v0.64.22",
-    "status": "dispatched",
-    "workflow_run_id": "30808097258",
-    "updated_at": "2026-08-03T11:17:49Z"
+    "status": "promoted",
+    "workflow_run_id": "30808972629",
+    "updated_at": "2026-08-03T12:54:02Z"
   },
   "last_check": {
     "status": "ready",
@@ -29,7 +23,6 @@
     "checked_at": "2026-08-03T11:05:18Z",
     "detail": "v0.64.22 was confirmed by 3 consecutive observations"
   },
-  "last_published_base_tag": "v0.64.20",
-  "last_promoted_source_sha": "f04693403c94683445ab3b5df3645da33e1a36c8",
-  "current_upstream_main_sha": "6d899d08f0a70cdb370c9700200b100884f9a788"
+  "last_published_base_tag": "v0.64.22",
+  "last_promoted_source_sha": "9cd858531eec6f1f114ad6f2037218dd39501302"
 }
