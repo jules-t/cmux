@@ -250,6 +250,26 @@ jobs:
             --base-tag "${{ needs.metadata.outputs.base_tag }}" \
             --run-url "$RUN_URL"
 
+      - name: Rehearse publication against a disposable release
+        if: ${{ inputs.publish_release }}
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_FORK_TOKEN }}
+          PYTHONPATH: ${{ github.workspace }}/control
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "PERSONAL_FORK_TOKEN is required for the publication rehearsal" >&2
+            exit 1
+          fi
+          python3 control/personal/release_publisher.py rehearse \
+            --repo "$GITHUB_REPOSITORY" \
+            --config control/personal/config.json \
+            --target-sha "$TARGET_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-url "$RUN_URL"
+
   ghostty_helper:
     needs: [metadata, preflight]
     runs-on: macos-15

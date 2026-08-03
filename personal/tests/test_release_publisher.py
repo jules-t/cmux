@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+import calendar
 import hashlib
 import json
 import os
 import pathlib
 import subprocess
 import tempfile
+import time
 import unittest
 from unittest import mock
 
-from personal import release_publisher
+from personal import local_updater, release_publisher
 from personal.common import ControlError
 from personal.tests.test_official_runtime_manifest import nightly_manifest_fixture
 from personal.tests.test_verify_release_assets import (
@@ -510,6 +512,134 @@ class ReleasePublisherTests(unittest.TestCase):
                         base_tag=BASE_TAG,
                         personal_tag=PERSONAL_TAG,
                     )
+
+
+class PublicationRehearsalTests(unittest.TestCase):
+    def deleting_stub(self, deleted: list[str]):
+        def stub(*arguments: str) -> subprocess.CompletedProcess[str]:
+            if arguments[:2] == ("release", "delete"):
+                deleted.append(arguments[2])
+            return completed()
+
+        return stub
+
+    def test_rehearsal_tags_come_only_from_numeric_run_ids(self) -> None:
+        self.assertEqual(
+            release_publisher.rehearsal_tag("30806253387"),
+            "personal-rehearsal-30806253387",
+        )
+        for invalid in ("", "abc", "1 2", "1; rm -rf /", "../escape"):
+            with self.subTest(run_id=invalid), self.assertRaises(ControlError):
+                release_publisher.rehearsal_tag(invalid)
+
+    def test_rehearsal_releases_are_invisible_to_the_local_updater(self) -> None:
+        tag = release_publisher.rehearsal_tag("30806253387")
+        releases = [
+            {"tag_name": tag, "draft": False, "prerelease": False},
+            {"tag_name": PERSONAL_TAG, "draft": False, "prerelease": False},
+        ]
+        self.assertEqual(
+            local_updater.select_release(releases)["tag_name"], PERSONAL_TAG
+        )
+        with self.assertRaises(ControlError):
+            local_updater.select_release(
+                [{"tag_name": tag, "draft": False, "prerelease": False}]
+            )
+
+    def test_rehearsal_cleanup_refuses_to_delete_a_real_release(self) -> None:
+        for tag in (PERSONAL_TAG, BASE_TAG, "personal-v0.64.22-r1"):
+            with self.subTest(tag=tag), self.assertRaises(ControlError):
+                release_publisher.delete_rehearsal_release(REPOSITORY, tag)
+
+    def test_sweep_removes_only_expired_foreign_rehearsals(self) -> None:
+        now = calendar.timegm(
+            time.strptime("2026-08-03T12:00:00Z", "%Y-%m-%dT%H:%M:%SZ")
+        )
+        releases = [
+            {"tag_name": PERSONAL_TAG, "created_at": "2026-07-01T00:00:00Z"},
+            {"tag_name": "personal-rehearsal-1", "created_at": "2026-08-03T00:00:00Z"},
+            {"tag_name": "personal-rehearsal-2", "created_at": "2026-08-03T11:00:00Z"},
+            {"tag_name": "personal-rehearsal-9", "created_at": "2026-08-02T00:00:00Z"},
+        ]
+        deleted: list[str] = []
+        with mock.patch.object(
+            release_publisher, "list_releases", return_value=releases
+        ), mock.patch.object(
+            release_publisher,
+            "gh_allowing_failure",
+            side_effect=self.deleting_stub(deleted),
+        ):
+            swept = release_publisher.sweep_stale_rehearsals(
+                REPOSITORY, keep_tag="personal-rehearsal-9", now=now
+            )
+
+        self.assertEqual(swept, ["personal-rehearsal-1"])
+        self.assertEqual(deleted, ["personal-rehearsal-1"])
+
+    def test_rehearsal_deletes_its_scratch_release_after_a_failure(self) -> None:
+        deleted: list[str] = []
+        with mock.patch.dict(os.environ, {"GH_TOKEN": "token"}), mock.patch.object(
+            release_publisher, "list_releases", return_value=[]
+        ), mock.patch.object(
+            release_publisher, "gh", side_effect=ControlError("release create failed")
+        ), mock.patch.object(
+            release_publisher,
+            "gh_allowing_failure",
+            side_effect=self.deleting_stub(deleted),
+        ):
+            with self.assertRaises(ControlError):
+                release_publisher.rehearse_publication(
+                    repository=REPOSITORY,
+                    config=RELEASE_ASSET_CONFIG,
+                    target_sha=SOURCE_SHA,
+                    run_id="42",
+                )
+
+        self.assertEqual(
+            deleted, ["personal-rehearsal-42", "personal-rehearsal-42"]
+        )
+
+    def test_rehearsal_verifies_uploaded_assets_before_and_after_exposure(self) -> None:
+        deleted: list[str] = []
+        verified: list[dict[str, object]] = []
+        draft = {"id": 1, "tag_name": "personal-rehearsal-42", "draft": True}
+        public = {"id": 1, "tag_name": "personal-rehearsal-42", "draft": False}
+
+        with mock.patch.dict(os.environ, {"GH_TOKEN": "token"}), mock.patch.object(
+            release_publisher, "list_releases", return_value=[]
+        ), mock.patch.object(
+            release_publisher, "gh", side_effect=lambda *a: completed()
+        ), mock.patch.object(
+            release_publisher,
+            "gh_allowing_failure",
+            side_effect=self.deleting_stub(deleted),
+        ), mock.patch.object(
+            release_publisher, "wait_for_release", side_effect=[draft, public]
+        ), mock.patch.object(
+            release_publisher, "find_release", return_value=draft
+        ), mock.patch.object(
+            release_publisher,
+            "verify_remote_assets",
+            side_effect=lambda repository, release, expected: verified.append(expected),
+        ):
+            result = release_publisher.rehearse_publication(
+                repository=REPOSITORY,
+                config=RELEASE_ASSET_CONFIG,
+                target_sha=SOURCE_SHA,
+                run_id="42",
+            )
+
+        self.assertEqual(result["tag"], "personal-rehearsal-42")
+        self.assertEqual(len(verified), 2)
+        self.assertEqual(
+            sorted(verified[0]),
+            [
+                "cmux-personal-macos-arm64.zip",
+                "cmux-personal-macos-arm64.zip.sha256",
+                "cmux-personal-manifest.json",
+            ],
+        )
+        self.assertEqual(deleted, ["personal-rehearsal-42", "personal-rehearsal-42"])
 
 
 if __name__ == "__main__":

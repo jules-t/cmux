@@ -26,7 +26,7 @@ CHANNEL_ARGUMENT_RE = re.compile(
     re.MULTILINE,
 )
 MUTATION_MARKERS = (
-    r"release_publisher\.py\s+(?:reserve|ensure-reservation|publish)",
+    r"release_publisher\.py\s+(?:reserve|ensure-reservation|publish|rehearse)",
     r"state_manager\.py\s+(?:claim-publication|finalize-publication)",
     r"candidate_manager\.py\s+publish",
     r"\bgh workflow run\b",
@@ -462,6 +462,23 @@ def validate_build_workflow(
         return
     if jobs["preflight"].has_job_if:
         errors.append(f"{path}: preflight must run as a successful no-op when publishing is off")
+
+    rehearsal = next(
+        (
+            step
+            for step in jobs["preflight"].steps
+            if "release_publisher.py rehearse" in step.text
+        ),
+        None,
+    )
+    if rehearsal is None:
+        errors.append(
+            f"{path}: preflight must rehearse publication before any macOS build time"
+        )
+    elif "if: ${{ inputs.publish_release }}" not in rehearsal.text:
+        errors.append(
+            f"{path}: the publication rehearsal must be skipped when publishing is off"
+        )
 
     metadata_checkout = next(
         (
