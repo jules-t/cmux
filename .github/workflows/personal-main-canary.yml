@@ -46,8 +46,13 @@ jobs:
         with:
           ref: personal/stable
           path: source
-          fetch-depth: 0
+          fetch-depth: 1
+          fetch-tags: false
+          filter: blob:none
           persist-credentials: false
+
+      - name: Fetch current personal source history
+        run: control/personal/ci/fetch_target_history.sh "$GITHUB_WORKSPACE/source"
 
       - name: Select a fully published upstream main revision
         id: observe
@@ -181,8 +186,13 @@ jobs:
         with:
           ref: personal/stable
           path: source
-          fetch-depth: 0
+          fetch-depth: 1
+          fetch-tags: false
+          filter: blob:none
           persist-credentials: false
+
+      - name: Fetch current personal source history
+        run: control/personal/ci/fetch_target_history.sh "$GITHUB_WORKSPACE/source"
 
       - name: Prepare main candidate
         id: prepare
@@ -263,8 +273,13 @@ jobs:
         with:
           ref: personal/stable
           path: source
-          fetch-depth: 0
+          fetch-depth: 1
+          fetch-tags: false
+          filter: blob:none
           persist-credentials: false
+
+      - name: Fetch current personal source history
+        run: control/personal/ci/fetch_target_history.sh "$GITHUB_WORKSPACE/source"
 
       - name: Download original conflict context
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0

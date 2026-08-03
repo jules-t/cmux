@@ -11,6 +11,7 @@ from personal.workflow_contracts import (
     validate_external_action_pins,
     validate_publish_workflow,
     validate_repository,
+    validate_target_history_checkouts,
     validate_token_contracts,
     validate_update_workflow,
 )
@@ -232,7 +233,7 @@ jobs:
         repository = pathlib.Path(__file__).resolve().parents[2]
         path = repository / ".github" / "workflows" / "personal-build.yml"
         text = path.read_text(encoding="utf-8").replace(
-            'git fetch --filter=blob:none --no-tags --unshallow origin "$source_sha"',
+            'control/personal/ci/fetch_target_history.sh "$GITHUB_WORKSPACE/source"',
             "git fetch origin",
             1,
         )
@@ -244,13 +245,69 @@ jobs:
         repository = pathlib.Path(__file__).resolve().parents[2]
         path = repository / ".github" / "workflows" / "personal-build.yml"
         text = path.read_text(encoding="utf-8").replace(
-            'git fetch --filter=blob:none --no-tags --unshallow origin "$source_sha"',
+            'control/personal/ci/fetch_target_history.sh "$GITHUB_WORKSPACE/source"',
             "git fetch origin '+refs/heads/*:refs/remotes/origin/*'",
             1,
         )
         errors: list[str] = []
         validate_build_workflow(path, parse_jobs(path, text), errors)
         self.assertTrue(any("must not fetch all branch" in error for error in errors))
+
+    def test_full_history_checkout_rejects_fetching_every_ref(self) -> None:
+        text = """\
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out current personal source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          path: source
+          fetch-depth: 0
+      - name: Continue
+        run: true
+"""
+        path = pathlib.Path("all-refs.yml")
+        errors: list[str] = []
+        validate_target_history_checkouts(path, parse_jobs(path, text), errors)
+        self.assertTrue(any("fetches every repository ref" in error for error in errors))
+
+    def test_full_history_contract_does_not_depend_on_step_names(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        path = repository / ".github" / "workflows" / "personal-update.yml"
+        text = (
+            path.read_text(encoding="utf-8")
+            .replace(
+                "name: Check out current personal source",
+                "name: Renamed source checkout",
+                1,
+            )
+            .replace(
+                'run: control/personal/ci/fetch_target_history.sh '
+                '"$GITHUB_WORKSPACE/source"',
+                "run: echo skipped",
+                1,
+            )
+        )
+        errors: list[str] = []
+        validate_target_history_checkouts(path, parse_jobs(path, text), errors)
+        self.assertTrue(any("immutable target-history fetch" in error for error in errors))
+
+    def test_full_history_contract_requires_an_exact_helper_command(self) -> None:
+        repository = pathlib.Path(__file__).resolve().parents[2]
+        path = repository / ".github" / "workflows" / "personal-update.yml"
+        expected = (
+            'run: control/personal/ci/fetch_target_history.sh '
+            '"$GITHUB_WORKSPACE/source"'
+        )
+        text = path.read_text(encoding="utf-8").replace(
+            expected,
+            f"run: echo '{expected}'",
+            1,
+        )
+        errors: list[str] = []
+        validate_target_history_checkouts(path, parse_jobs(path, text), errors)
+        self.assertTrue(any("immutable target-history fetch" in error for error in errors))
 
     def test_build_metadata_rejects_checkout_tag_fetching(self) -> None:
         repository = pathlib.Path(__file__).resolve().parents[2]
