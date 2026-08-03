@@ -5,10 +5,10 @@
   "personal_stable_sha": "4831dc9b47fb6c888823bcb75975c6463025a93c",
   "publication_claim": null,
   "pending_observation": {
-    "tag": "v0.64.21",
+    "tag": "v0.64.22",
     "count": 1,
-    "first_seen_at": "2026-08-03T03:55:21Z",
-    "last_seen_at": "2026-08-03T03:55:21Z"
+    "first_seen_at": "2026-08-03T08:58:13Z",
+    "last_seen_at": "2026-08-03T08:58:13Z"
   },
   "attempt": {
     "tag": "v0.64.20",
@@ -18,10 +18,10 @@
   },
   "last_check": {
     "status": "observing",
-    "appcast_tag": "v0.64.21",
-    "github_tag": "v0.64.21",
-    "checked_at": "2026-08-03T03:55:21Z",
-    "detail": "first stable observation for v0.64.21; 1 more check(s) required"
+    "appcast_tag": "v0.64.22",
+    "github_tag": "v0.64.22",
+    "checked_at": "2026-08-03T08:58:13Z",
+    "detail": "first stable observation for v0.64.22; 1 more check(s) required"
   },
   "last_published_base_tag": "v0.64.20",
   "last_promoted_source_sha": "f04693403c94683445ab3b5df3645da33e1a36c8",
