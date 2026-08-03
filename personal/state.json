@@ -17,11 +17,11 @@
     "updated_at": "2026-08-03T12:54:02Z"
   },
   "last_check": {
-    "status": "ready",
+    "status": "current",
     "appcast_tag": "v0.64.22",
     "github_tag": "v0.64.22",
-    "checked_at": "2026-08-03T11:05:18Z",
-    "detail": "v0.64.22 was confirmed by 3 consecutive observations"
+    "checked_at": "2026-08-03T15:16:47Z",
+    "detail": "v0.64.22 is still the latest stable release"
   },
   "last_published_base_tag": "v0.64.22",
   "last_promoted_source_sha": "9cd858531eec6f1f114ad6f2037218dd39501302"
