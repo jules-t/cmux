@@ -127,8 +127,13 @@ jobs:
         with:
           ref: ${{ github.sha }}
           path: control
-          fetch-depth: 0
+          fetch-depth: 1
+          fetch-tags: false
+          filter: blob:none
           persist-credentials: false
+
+      - name: Fetch trusted control history
+        run: control/personal/ci/fetch_target_history.sh "$GITHUB_WORKSPACE/control"
 
       - name: Require source workflow commit to remain trusted
         working-directory: control

@@ -138,6 +138,13 @@ def job_if_expression(job: Job) -> str | None:
     return match.group(1).strip() if match else None
 
 
+def step_run_command(step: Step) -> str | None:
+    match = re.search(r"^\s+run:\s*([^\n]+?)\s*$", step.text, re.MULTILINE)
+    if match is None or match.group(1) in {"|", ">", "|-", ">-"}:
+        return None
+    return match.group(1)
+
+
 def is_personal_mutation(step: Step) -> bool:
     return personal_mutation_offset(step) is not None
 
@@ -270,6 +277,68 @@ def validate_artifacts(
                 )
 
 
+def validate_target_history_checkouts(
+    path: pathlib.Path, jobs: dict[str, Job], errors: list[str]
+) -> None:
+    requirements_by_workflow = {
+        "personal-build.yml": {("metadata", "source")},
+        "personal-main-canary.yml": {
+            ("observe", "source"),
+            ("prepare", "source"),
+            ("resolve", "source"),
+        },
+        "personal-publish.yml": {("publish", "control")},
+        "personal-update.yml": {
+            ("prepare", "source"),
+            ("resolve", "source"),
+        },
+    }
+    for job in jobs.values():
+        for step in job.steps:
+            if "uses: actions/checkout@" not in step.text:
+                continue
+            if step_input(step, "fetch-depth") == "0":
+                errors.append(
+                    f"{path}: {job.name!r}/{step.name!r} fetches every repository ref"
+                )
+
+    for job_name, checkout_path in requirements_by_workflow.get(path.name, set()):
+        job = jobs.get(job_name)
+        if job is None:
+            errors.append(f"{path}: missing full-history job {job_name!r}")
+            continue
+        matches = [
+            (index, step)
+            for index, step in enumerate(job.steps)
+            if "uses: actions/checkout@" in step.text
+            and step_input(step, "path") == checkout_path
+        ]
+        if len(matches) != 1:
+            errors.append(
+                f"{path}: {job_name!r} must have one {checkout_path!r} checkout"
+            )
+            continue
+        index, checkout = matches[0]
+        if (
+            step_input(checkout, "fetch-depth") != "1"
+            or step_input(checkout, "fetch-tags") != "false"
+            or step_input(checkout, "filter") != "blob:none"
+        ):
+            errors.append(
+                f"{path}: {job_name!r}/{checkout.name!r} must use a blobless shallow checkout"
+            )
+        history_step = job.steps[index + 1] if index + 1 < len(job.steps) else None
+        expected = (
+            "control/personal/ci/fetch_target_history.sh "
+            f'"$GITHUB_WORKSPACE/{checkout_path}"'
+        )
+        if history_step is None or step_run_command(history_step) != expected:
+            errors.append(
+                f"{path}: {job_name!r}/{checkout.name!r} is not followed by "
+                "an immutable target-history fetch"
+            )
+
+
 def validate_build_workflow(
     path: pathlib.Path, jobs: dict[str, Job], errors: list[str]
 ) -> None:
@@ -309,26 +378,18 @@ def validate_build_workflow(
             f"{path}: metadata requested-source checkout must be a blobless shallow fetch"
         )
 
-    metadata_validation = next(
+    metadata_history = next(
         (
             step
             for step in jobs["metadata"].steps
-            if step.name == "Validate source and stable base"
+            if step.name == "Fetch requested source history"
         ),
         None,
     )
-    targeted_history_fetch = (
-        'git fetch --filter=blob:none --no-tags --unshallow origin "$source_sha"'
-    )
-    origin_fetches = [
-        line.strip()
-        for line in jobs["metadata"].text.splitlines()
-        if re.search(r"\bgit fetch\b.*\borigin(?:\s|$)", line)
-    ]
     if (
-        metadata_validation is None
-        or targeted_history_fetch not in metadata_validation.text
-        or origin_fetches != [targeted_history_fetch]
+        metadata_history is None
+        or 'fetch_target_history.sh "$GITHUB_WORKSPACE/source"'
+        not in metadata_history.text
     ):
         errors.append(
             f"{path}: metadata must fetch only the immutable requested-source history"
@@ -587,6 +648,7 @@ def validate_repository(root: pathlib.Path) -> list[str]:
         parsed[path.name] = jobs
         validate_external_action_pins(path, text, errors)
         validate_token_contracts(path, text, jobs, errors)
+        validate_target_history_checkouts(path, jobs, errors)
         try:
             validate_artifacts(path, jobs, errors)
         except WorkflowContractError as exc:

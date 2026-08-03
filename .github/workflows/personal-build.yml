@@ -96,6 +96,9 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
+      - name: Fetch requested source history
+        run: control/personal/ci/fetch_target_history.sh "$GITHUB_WORKSPACE/source"
+
       - name: Validate source and stable base
         id: metadata
         working-directory: source
@@ -106,7 +109,6 @@ jobs:
         run: |
           set -euo pipefail
           source_sha="$(git rev-parse HEAD)"
-          git fetch --filter=blob:none --no-tags --unshallow origin "$source_sha"
           git remote add upstream https://github.com/manaflow-ai/cmux.git
           git fetch --filter=blob:none --no-tags --force upstream \
             '+refs/tags/v*:refs/tags/v*'
