@@ -17,11 +17,11 @@
     "updated_at": "2026-08-03T08:58:52Z"
   },
   "last_check": {
-    "status": "ready",
+    "status": "already_attempted",
     "appcast_tag": "v0.64.22",
     "github_tag": "v0.64.22",
-    "checked_at": "2026-08-03T08:58:52Z",
-    "detail": "v0.64.22 was confirmed by 2 consecutive observations"
+    "checked_at": "2026-08-03T10:06:10Z",
+    "detail": "v0.64.22 was already queued with status queued; automatic retries are suppressed"
   },
   "last_published_base_tag": "v0.64.20",
   "last_promoted_source_sha": "f04693403c94683445ab3b5df3645da33e1a36c8",
