@@ -19,6 +19,7 @@ from personal.local_updater import (
     release_key,
     select_release,
     should_discover,
+    stage_app,
     staged_bundle_path,
     validate_install_destination,
 )
@@ -420,6 +421,76 @@ class LocalUpdaterTests(unittest.TestCase):
                 },
             )
             self.assertFalse(read_staged(staged_state_path, staged_app))
+
+    def test_failed_replacement_keeps_the_existing_staged_update(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            _, _, staged_app = self._stage(root, "personal-v0.64.22-r1")
+            staged_state_path = root / ".local/share/cmux-personal/staged.json"
+            previous_state = staged_state_path.read_bytes()
+            extracted_app = root / "extracted/cmux Personal.app"
+            extracted_app.mkdir(parents=True)
+
+            with mock.patch(
+                "personal.local_updater.subprocess.run",
+                side_effect=OSError("ditto failed"),
+            ):
+                with self.assertRaisesRegex(OSError, "ditto failed"):
+                    stage_app(
+                        extracted_app,
+                        staged_app=staged_app,
+                        staged_state_path=staged_state_path,
+                        tag="personal-v0.64.22-r2",
+                        manifest={
+                            "source_sha": "c" * 40,
+                            "base_tag": "v0.64.20",
+                        },
+                    )
+
+            self.assertEqual(
+                (staged_app / "marker").read_text(encoding="utf-8"),
+                "personal-v0.64.22-r1",
+            )
+            self.assertEqual(staged_state_path.read_bytes(), previous_state)
+
+    def test_failed_staged_swap_restores_the_existing_update(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            _, _, staged_app = self._stage(root, "personal-v0.64.22-r1")
+            staged_state_path = root / ".local/share/cmux-personal/staged.json"
+            previous_state = staged_state_path.read_bytes()
+            extracted_app = root / "extracted/cmux Personal.app"
+            extracted_app.mkdir(parents=True)
+            (extracted_app / "marker").write_text("personal-v0.64.22-r2", encoding="utf-8")
+            real_replace = os.replace
+
+            def fake_run(command: list[str], **_kwargs: object) -> None:
+                if command[0] == "/usr/bin/ditto":
+                    shutil.copytree(command[1], command[2])
+
+            def fail_final_swap(source: os.PathLike[str], destination: os.PathLike[str]) -> None:
+                if ".building-" in pathlib.Path(source).name:
+                    raise OSError("swap failed")
+                real_replace(source, destination)
+
+            with (
+                mock.patch("personal.local_updater.subprocess.run", side_effect=fake_run),
+                mock.patch("personal.local_updater.os.replace", side_effect=fail_final_swap),
+            ):
+                with self.assertRaisesRegex(OSError, "swap failed"):
+                    stage_app(
+                        extracted_app,
+                        staged_app=staged_app,
+                        staged_state_path=staged_state_path,
+                        tag="personal-v0.64.22-r2",
+                        manifest={"source_sha": "c" * 40, "base_tag": "v0.64.20"},
+                    )
+
+            self.assertEqual(
+                (staged_app / "marker").read_text(encoding="utf-8"),
+                "personal-v0.64.22-r1",
+            )
+            self.assertEqual(staged_state_path.read_bytes(), previous_state)
 
     def test_discovery_is_due_again_once_the_interval_elapses(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
