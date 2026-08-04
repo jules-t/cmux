@@ -75,6 +75,22 @@ struct FilePreviewTextEditorTextKitTests {
         #expect(scrollView.verticalRulerView == nil)
     }
 
+    @Test("line number ruler clips its drawing to its own bounds")
+    func lineNumberRulerClipsToBounds() throws {
+        let scrollView = NSScrollView()
+        let textView = SavingTextView.makeFilePreviewTextView()
+        scrollView.documentView = textView
+
+        textView.configureLineNumberRuler(in: scrollView, enabled: true)
+        let ruler = try #require(scrollView.verticalRulerView)
+
+        // Since macOS 14, `clipsToBounds` defaults to false and the dirty rect passed to
+        // `draw(_:)` can extend beyond the view's bounds. The gutter separator fills the
+        // full dirty-rect height, so an unclipped ruler paints its separator upward across
+        // the file-path header and its divider.
+        #expect(ruler.clipsToBounds)
+    }
+
     @Test("find commands route to the focused text file preview")
     func findCommandsRouteToFocusedTextFilePreview() throws {
         let fileURL = FileManager.default.temporaryDirectory
