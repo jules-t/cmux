@@ -137,6 +137,7 @@ GITHUB_WORKSPACE="$SOURCE_ROOT" \
   ONLY_ACTIVE_ARCH=YES \
   -only-testing:cmuxTests/FilePreviewSyntaxHighlighterTests \
   -only-testing:cmuxTests/FilePreviewSyntaxHighlightSettingsFileStoreTests \
+  -only-testing:cmuxTests/FilePreviewTextEditorTextKitTests \
   test
 
 PERSONAL_APP="$DIST_ROOT/$APP_NAME.app"
