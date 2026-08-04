@@ -51,9 +51,10 @@ class SetupLocalTests(unittest.TestCase):
             with launch_agent.open("rb") as handle:
                 plist = plistlib.load(handle)
             self.assertEqual(plist["Label"], "com.jules.cmux-personal-updater")
-            self.assertEqual(plist["StartInterval"], 21600)
+            self.assertEqual(plist["StartInterval"], 120)
             self.assertIn("-m", plist["ProgramArguments"])
             self.assertIn("personal.local_updater", plist["ProgramArguments"])
+            self.assertIn("--scheduled", plist["ProgramArguments"])
             self.assertIn("/opt/homebrew/bin", plist["EnvironmentVariables"]["PATH"])
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import datetime as dt
 import fcntl
 import hashlib
 import json
@@ -19,6 +20,9 @@ from typing import Any
 
 from personal.common import ControlError, PERSONAL_TAG_RE, load_json, utc_now, write_json
 from personal.official_runtime_manifest import validate_official_runtime_manifest
+
+
+DISCOVERY_INTERVAL_SECONDS = 21600
 
 
 class AppRunningError(ControlError):
@@ -289,35 +293,108 @@ def prune_backups(backups: pathlib.Path, keep: int = 2) -> None:
         shutil.rmtree(entry)
 
 
-def install_app(
+def staged_bundle_path(destination: pathlib.Path) -> pathlib.Path:
+    """Where a verified update waits for the app to close.
+
+    Kept beside the install destination so the final swap is a same-volume rename.
+    """
+    return destination.parent / f".{destination.name}.staged"
+
+
+def read_staged(staged_state_path: pathlib.Path, staged_app: pathlib.Path) -> dict[str, Any]:
+    if staged_app.is_symlink() or not staged_app.is_dir():
+        return {}
+    if not staged_state_path.is_file():
+        return {}
+    try:
+        staged = load_json(staged_state_path)
+    except (ControlError, OSError, json.JSONDecodeError):
+        return {}
+    tag = staged.get("personal_tag")
+    if not isinstance(tag, str) or not PERSONAL_TAG_RE.fullmatch(tag):
+        return {}
+    if staged.get("staged_path") != str(staged_app):
+        return {}
+    if not isinstance(staged.get("source_sha"), str) or not isinstance(staged.get("base_tag"), str):
+        return {}
+    return staged
+
+
+def discard_staged(staged_state_path: pathlib.Path, staged_app: pathlib.Path) -> None:
+    remove_path(staged_app)
+    if staged_state_path.exists():
+        staged_state_path.unlink()
+
+
+def remove_path(path: pathlib.Path) -> None:
+    if path.is_symlink() or (path.exists() and not path.is_dir()):
+        path.unlink()
+    elif path.is_dir():
+        shutil.rmtree(path)
+
+
+def stage_app(
     extracted_app: pathlib.Path,
+    *,
+    staged_app: pathlib.Path,
+    staged_state_path: pathlib.Path,
+    tag: str,
+    manifest: dict[str, Any],
+) -> None:
+    staged_app.parent.mkdir(parents=True, exist_ok=True)
+    building = staged_app.parent / f"{staged_app.name}.building-{os.getpid()}"
+    previous = staged_app.parent / f"{staged_app.name}.previous-{os.getpid()}"
+    remove_path(building)
+    remove_path(previous)
+    staged_state = {
+        "schema_version": 1,
+        "personal_tag": tag,
+        "source_sha": manifest["source_sha"],
+        "base_tag": manifest["base_tag"],
+        "staged_at": utc_now(),
+        "staged_path": str(staged_app),
+    }
+    if manifest.get("upstream_main_sha"):
+        staged_state["upstream_main_sha"] = manifest["upstream_main_sha"]
+
+    moved_previous = False
+    try:
+        subprocess.run(["/usr/bin/ditto", str(extracted_app), str(building)], check=True)
+        subprocess.run(
+            ["/usr/bin/xattr", "-dr", "com.apple.quarantine", str(building)],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if staged_app.exists() or staged_app.is_symlink():
+            os.replace(staged_app, previous)
+            moved_previous = True
+        os.replace(building, staged_app)
+        write_json(staged_state_path, staged_state)
+    except Exception:
+        remove_path(building)
+        if moved_previous:
+            remove_path(staged_app)
+            os.replace(previous, staged_app)
+        raise
+    remove_path(previous)
+
+
+def install_staged_app(
+    staged_app: pathlib.Path,
     *,
     destination: pathlib.Path,
     bundle_identifier: str,
     data_root: pathlib.Path,
 ) -> None:
+    """Swap a staged bundle into place. Two renames, so the app cannot start mid-install."""
     old_tag = existing_bundle_tag(destination, bundle_identifier)
-    if is_running(destination):
-        raise AppRunningError(
-            "cmux Personal is running; close it and the updater will retry without killing it"
-        )
     destination.parent.mkdir(parents=True, exist_ok=True)
     backups = data_root / "backups"
     backups.mkdir(parents=True, exist_ok=True)
-    staging = destination.parent / f".{destination.name}.installing-{os.getpid()}"
-    if staging.exists():
-        shutil.rmtree(staging)
-    subprocess.run(["/usr/bin/ditto", str(extracted_app), str(staging)], check=True)
-    subprocess.run(
-        ["/usr/bin/xattr", "-dr", "com.apple.quarantine", str(staging)],
-        check=False,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
     if is_running(destination):
-        shutil.rmtree(staging)
         raise AppRunningError(
-            "cmux Personal started while its update was being prepared; close it and retry"
+            "cmux Personal is running; close it and the updater will install the staged update"
         )
 
     backup: pathlib.Path | None = None
@@ -327,14 +404,26 @@ def install_app(
             backup_tag = old_tag or "unknown-personal-version"
             backup = backups / f"{stamp}-{backup_tag}.app"
             os.replace(destination, backup)
-        os.replace(staging, destination)
+        os.replace(staged_app, destination)
     except Exception:
-        if staging.exists():
-            shutil.rmtree(staging)
         if backup and backup.exists() and not destination.exists():
             os.replace(backup, destination)
         raise
     prune_backups(backups)
+
+
+def should_discover(check_path: pathlib.Path, *, interval_seconds: int) -> bool:
+    if not check_path.is_file():
+        return True
+    try:
+        checked = load_json(check_path).get("last_checked_at")
+        last = dt.datetime.fromisoformat(str(checked).replace("Z", "+00:00"))
+    except (ControlError, OSError, json.JSONDecodeError, TypeError, ValueError):
+        return True
+    if last.tzinfo is None:
+        return True
+    age = (dt.datetime.now(dt.timezone.utc) - last).total_seconds()
+    return age < 0 or age >= interval_seconds
 
 
 def install_state(state_path: pathlib.Path) -> dict[str, Any]:
@@ -345,6 +434,31 @@ def install_state(state_path: pathlib.Path) -> dict[str, Any]:
     except (ControlError, OSError, json.JSONDecodeError):
         return {}
     return value
+
+
+def record_installation(
+    tag: str,
+    details: dict[str, Any],
+    *,
+    state_path: pathlib.Path,
+    staged_state_path: pathlib.Path,
+    install_path: pathlib.Path,
+) -> None:
+    state = {
+        "schema_version": 1,
+        "personal_tag": tag,
+        "source_sha": details["source_sha"],
+        "base_tag": details["base_tag"],
+        "installed_at": utc_now(),
+        "install_path": str(install_path),
+    }
+    if details.get("upstream_main_sha"):
+        state["upstream_main_sha"] = details["upstream_main_sha"]
+    write_json(state_path, state)
+    if staged_state_path.exists():
+        staged_state_path.unlink()
+    notify("cmux Personal updated", f"Installed {tag}. It will be used the next time you open it.")
+    print(f"installed cmux Personal {tag}")
 
 
 def installation_status(
@@ -412,11 +526,68 @@ def installation_status(
     return True, normalized_state_tag, bundle_tag, "the installed app is verified"
 
 
+def apply_staged_update(
+    staged: dict[str, Any],
+    *,
+    staged_app: pathlib.Path,
+    staged_state_path: pathlib.Path,
+    state_path: pathlib.Path,
+    destination: pathlib.Path,
+    bundle_identifier: str,
+    upstream_repository: str,
+    data_root: pathlib.Path,
+) -> bool:
+    """Verify a staged bundle and swap it in.
+
+    Returns False when the bundle failed verification and was discarded, so the caller
+    can download it again. Raises AppRunningError when the app is open.
+    """
+    tag = str(staged["personal_tag"])
+    try:
+        inspect_bundle(
+            staged_app,
+            expected_bundle_identifier=bundle_identifier,
+            expected_source_sha=str(staged["source_sha"]),
+            expected_base_tag=str(staged["base_tag"]),
+            expected_personal_tag=tag,
+            expected_upstream_repository=upstream_repository,
+            expected_upstream_main_sha=(
+                str(staged["upstream_main_sha"]) if staged.get("upstream_main_sha") else None
+            ),
+        )
+    except ControlError as exc:
+        print(f"discarding the staged cmux Personal {tag}: {exc}")
+        discard_staged(staged_state_path, staged_app)
+        return False
+    install_staged_app(
+        staged_app,
+        destination=destination,
+        bundle_identifier=bundle_identifier,
+        data_root=data_root,
+    )
+    record_installation(
+        tag,
+        staged,
+        state_path=state_path,
+        staged_state_path=staged_state_path,
+        install_path=destination,
+    )
+    return True
+
+
 def _main(resources: contextlib.ExitStack) -> int:
     parser = argparse.ArgumentParser(description="Verify and install cmux Personal releases.")
     parser.add_argument("--config", required=True)
     parser.add_argument("--tag")
     parser.add_argument("--check-only", action="store_true")
+    parser.add_argument(
+        "--scheduled",
+        action="store_true",
+        help=(
+            "Run as the LaunchAgent: install a staged update on every tick, but only "
+            "contact GitHub once per discovery interval."
+        ),
+    )
     args = parser.parse_args()
 
     config = load_json(args.config)
@@ -431,6 +602,57 @@ def _main(resources: contextlib.ExitStack) -> int:
         print("another cmux Personal updater is already running")
         return 0
 
+    state_path = data_root / "current.json"
+    staged_state_path = data_root / "staged.json"
+    check_path = data_root / "check.json"
+    destination = validate_install_destination(str(config["install_path"]))
+    bundle_identifier = str(config["bundle_identifier"])
+    upstream_repository = str(config["upstream_repository"])
+    staged_app = staged_bundle_path(destination)
+    staged = read_staged(staged_state_path, staged_app)
+
+    def apply_staged(entry: dict[str, Any]) -> bool:
+        return apply_staged_update(
+            entry,
+            staged_app=staged_app,
+            staged_state_path=staged_state_path,
+            state_path=state_path,
+            destination=destination,
+            bundle_identifier=bundle_identifier,
+            upstream_repository=upstream_repository,
+            data_root=data_root,
+        )
+
+    # A scheduled tick can apply a newer staged bundle without contacting GitHub.
+    # Unknown, equal, or newer installed versions fall through to discovery so this
+    # cheap path cannot downgrade an app or overwrite one it cannot compare safely.
+    if staged and args.scheduled and not args.tag and not args.check_only:
+        should_apply_staged = False
+        if not is_running(destination):
+            try:
+                installed_tag = existing_bundle_tag(destination, bundle_identifier)
+            except ControlError:
+                pass
+            else:
+                should_apply_staged = not destination.exists() or (
+                    installed_tag is not None
+                    and release_key(str(staged["personal_tag"])) > release_key(installed_tag)
+                )
+        if should_apply_staged:
+            try:
+                if apply_staged(staged):
+                    return 0
+            except AppRunningError:
+                return 0
+            staged = {}
+
+    if args.scheduled:
+        if not should_discover(check_path, interval_seconds=DISCOVERY_INTERVAL_SECONDS):
+            return 0
+        # Recorded before the request so a failing GitHub call backs off for a full
+        # interval instead of retrying on every tick.
+        write_json(check_path, {"schema_version": 1, "last_checked_at": utc_now()})
+
     repository = str(config["fork_repository"])
     releases = request_json(f"https://api.github.com/repos/{repository}/releases?per_page=30")
     if not isinstance(releases, list):
@@ -438,14 +660,12 @@ def _main(resources: contextlib.ExitStack) -> int:
     release = select_release(releases, args.tag)
     tag = str(release["tag_name"])
 
-    state_path = data_root / "current.json"
-    destination = validate_install_destination(str(config["install_path"]))
     verified_current, state_tag, bundle_tag, status_detail = installation_status(
         destination=destination,
         state=install_state(state_path),
-        expected_bundle_identifier=str(config["bundle_identifier"]),
+        expected_bundle_identifier=bundle_identifier,
         expected_personal_tag=tag,
-        expected_upstream_repository=str(config["upstream_repository"]),
+        expected_upstream_repository=upstream_repository,
     )
     if args.check_only:
         print(
@@ -454,6 +674,7 @@ def _main(resources: contextlib.ExitStack) -> int:
                     "latest": tag,
                     "state_tag": state_tag,
                     "bundle_tag": bundle_tag,
+                    "staged_tag": staged.get("personal_tag"),
                     "verified_current": verified_current,
                     "update_available": not verified_current,
                     "detail": status_detail,
@@ -462,9 +683,24 @@ def _main(resources: contextlib.ExitStack) -> int:
         )
         return 0
     if verified_current:
-        print(f"cmux Personal is current at {tag}")
+        if staged:
+            discard_staged(staged_state_path, staged_app)
+        if not args.scheduled:
+            print(f"cmux Personal is current at {tag}")
         return 0
     print(f"cmux Personal requires installation: {status_detail}")
+
+    if staged and staged["personal_tag"] == tag:
+        # Downloaded and verified already; only the swap is left.
+        try:
+            if apply_staged(staged):
+                return 0
+        except AppRunningError:
+            if not args.scheduled:
+                raise
+            print(f"cmux Personal {tag} is staged; waiting for the app to close")
+            return 0
+        staged = {}
 
     assets = release_assets(release)
     archive_name = str(config["artifact_name"])
@@ -526,27 +762,39 @@ def _main(resources: contextlib.ExitStack) -> int:
                 else None
             ),
         )
-        install_app(
+        stage_app(
             app,
-            destination=destination,
-            bundle_identifier=str(config["bundle_identifier"]),
-            data_root=data_root,
+            staged_app=staged_app,
+            staged_state_path=staged_state_path,
+            tag=tag,
+            manifest=manifest,
         )
 
-    data_root.mkdir(parents=True, exist_ok=True)
-    installed_state = {
-        "schema_version": 1,
-        "personal_tag": tag,
-        "source_sha": manifest["source_sha"],
-        "base_tag": manifest["base_tag"],
-        "installed_at": utc_now(),
-        "install_path": str(validate_install_destination(str(config["install_path"]))),
-    }
-    if manifest.get("upstream_main_sha"):
-        installed_state["upstream_main_sha"] = manifest["upstream_main_sha"]
-    write_json(state_path, installed_state)
-    notify("cmux Personal updated", f"Installed {tag}. It will be used the next time you open it.")
-    print(f"installed cmux Personal {tag}")
+    # Swap directly rather than through apply_staged: this bundle was just verified
+    # above, so re-inspecting the copy would only repeat the work.
+    try:
+        install_staged_app(
+            staged_app,
+            destination=destination,
+            bundle_identifier=bundle_identifier,
+            data_root=data_root,
+        )
+    except AppRunningError:
+        if not args.scheduled:
+            raise
+        notify(
+            "cmux Personal update ready",
+            f"{tag} is staged. Quit cmux Personal and it installs automatically.",
+        )
+        print(f"staged cmux Personal {tag}; waiting for the app to close")
+        return 0
+    record_installation(
+        tag,
+        manifest,
+        state_path=state_path,
+        staged_state_path=staged_state_path,
+        install_path=destination,
+    )
     return 0
 
 
