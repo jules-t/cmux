@@ -504,6 +504,16 @@ class LocalUpdaterTests(unittest.TestCase):
             write_json(check_path, {"schema_version": 1, "last_checked_at": "not a timestamp"})
             self.assertTrue(should_discover(check_path, interval_seconds=60))
 
+    def test_discovery_is_due_when_last_checked_timestamp_has_no_timezone(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            check_path = pathlib.Path(temporary) / "check.json"
+            write_json(
+                check_path,
+                {"schema_version": 1, "last_checked_at": "2026-08-04T00:00:00"},
+            )
+
+            self.assertTrue(should_discover(check_path, interval_seconds=60))
+
     def test_lock_is_released_after_failure_with_retained_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
