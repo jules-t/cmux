@@ -321,12 +321,16 @@ def read_staged(staged_state_path: pathlib.Path, staged_app: pathlib.Path) -> di
 
 
 def discard_staged(staged_state_path: pathlib.Path, staged_app: pathlib.Path) -> None:
-    if staged_app.is_symlink() or (staged_app.exists() and not staged_app.is_dir()):
-        staged_app.unlink()
-    elif staged_app.is_dir():
-        shutil.rmtree(staged_app)
+    remove_path(staged_app)
     if staged_state_path.exists():
         staged_state_path.unlink()
+
+
+def remove_path(path: pathlib.Path) -> None:
+    if path.is_symlink() or (path.exists() and not path.is_dir()):
+        path.unlink()
+    elif path.is_dir():
+        shutil.rmtree(path)
 
 
 def stage_app(
@@ -337,24 +341,11 @@ def stage_app(
     tag: str,
     manifest: dict[str, Any],
 ) -> None:
-    discard_staged(staged_state_path, staged_app)
     staged_app.parent.mkdir(parents=True, exist_ok=True)
     building = staged_app.parent / f"{staged_app.name}.building-{os.getpid()}"
-    if building.exists():
-        shutil.rmtree(building)
-    try:
-        subprocess.run(["/usr/bin/ditto", str(extracted_app), str(building)], check=True)
-        subprocess.run(
-            ["/usr/bin/xattr", "-dr", "com.apple.quarantine", str(building)],
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        os.replace(building, staged_app)
-    except Exception:
-        if building.exists():
-            shutil.rmtree(building)
-        raise
+    previous = staged_app.parent / f"{staged_app.name}.previous-{os.getpid()}"
+    remove_path(building)
+    remove_path(previous)
     staged_state = {
         "schema_version": 1,
         "personal_tag": tag,
@@ -365,7 +356,28 @@ def stage_app(
     }
     if manifest.get("upstream_main_sha"):
         staged_state["upstream_main_sha"] = manifest["upstream_main_sha"]
-    write_json(staged_state_path, staged_state)
+
+    moved_previous = False
+    try:
+        subprocess.run(["/usr/bin/ditto", str(extracted_app), str(building)], check=True)
+        subprocess.run(
+            ["/usr/bin/xattr", "-dr", "com.apple.quarantine", str(building)],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if staged_app.exists() or staged_app.is_symlink():
+            os.replace(staged_app, previous)
+            moved_previous = True
+        os.replace(building, staged_app)
+        write_json(staged_state_path, staged_state)
+    except Exception:
+        remove_path(building)
+        if moved_previous:
+            remove_path(staged_app)
+            os.replace(previous, staged_app)
+        raise
+    remove_path(previous)
 
 
 def install_staged_app(
