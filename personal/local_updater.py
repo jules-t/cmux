@@ -635,19 +635,28 @@ def _main(resources: contextlib.ExitStack) -> int:
             data_root=data_root,
         )
 
-    # A staged bundle is already downloaded and verified, so applying it costs one
-    # pgrep and two renames. That is what lets the LaunchAgent tick often enough to
-    # catch a brief quit without hammering GitHub. While the app stays open this falls
-    # through to discovery, so a newer release can replace what is staged.
-    if staged and not args.tag and not args.check_only and not is_running(destination):
-        try:
-            if apply_staged(staged):
+    # A scheduled tick can apply a newer staged bundle without contacting GitHub.
+    # Unknown, equal, or newer installed versions fall through to discovery so this
+    # cheap path cannot downgrade an app or overwrite one it cannot compare safely.
+    if staged and args.scheduled and not args.tag and not args.check_only:
+        should_apply_staged = False
+        if not is_running(destination):
+            try:
+                installed_tag = existing_bundle_tag(destination, bundle_identifier)
+            except ControlError:
+                pass
+            else:
+                should_apply_staged = not destination.exists() or (
+                    installed_tag is not None
+                    and release_key(str(staged["personal_tag"])) > release_key(installed_tag)
+                )
+        if should_apply_staged:
+            try:
+                if apply_staged(staged):
+                    return 0
+            except AppRunningError:
                 return 0
-        except AppRunningError:
-            if not args.scheduled:
-                raise
-            return 0
-        staged = {}
+            staged = {}
 
     if args.scheduled:
         if not should_discover(check_path, interval_seconds=DISCOVERY_INTERVAL_SECONDS):
