@@ -420,6 +420,8 @@ def should_discover(check_path: pathlib.Path, *, interval_seconds: int) -> bool:
         last = dt.datetime.fromisoformat(str(checked).replace("Z", "+00:00"))
     except (ControlError, OSError, json.JSONDecodeError, TypeError, ValueError):
         return True
+    if last.tzinfo is None:
+        return True
     age = (dt.datetime.now(dt.timezone.utc) - last).total_seconds()
     return age < 0 or age >= interval_seconds
 
