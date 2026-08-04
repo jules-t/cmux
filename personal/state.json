@@ -1,15 +1,9 @@
 {
   "schema_version": 1,
   "current_stable_tag": "v0.64.22",
-  "last_promoted_personal_tag": "personal-v0.64.22-r1",
-  "personal_stable_sha": "9cd858531eec6f1f114ad6f2037218dd39501302",
-  "publication_claim": {
-    "base_tag": "v0.64.22",
-    "personal_tag": "personal-v0.64.22-r2",
-    "source_sha": "d4943075e83249e39859ae83a1ed157d8c4ba9da",
-    "workflow_run_id": "30883940783",
-    "claimed_at": "2026-08-04T07:54:37Z"
-  },
+  "last_promoted_personal_tag": "personal-v0.64.22-r2",
+  "personal_stable_sha": "d4943075e83249e39859ae83a1ed157d8c4ba9da",
+  "publication_claim": null,
   "pending_observation": {
     "tag": null,
     "count": 0,
@@ -19,8 +13,8 @@
   "attempt": {
     "tag": "v0.64.22",
     "status": "promoted",
-    "workflow_run_id": "30808972629",
-    "updated_at": "2026-08-03T12:54:02Z"
+    "workflow_run_id": "30883940783",
+    "updated_at": "2026-08-04T07:54:49Z"
   },
   "last_check": {
     "status": "current",
@@ -30,5 +24,6 @@
     "detail": "v0.64.22 is still the latest stable release"
   },
   "last_published_base_tag": "v0.64.22",
-  "last_promoted_source_sha": "9cd858531eec6f1f114ad6f2037218dd39501302"
+  "last_promoted_source_sha": "d4943075e83249e39859ae83a1ed157d8c4ba9da",
+  "current_upstream_main_sha": "d953ceda3925d2b7e469c2e7ed74c10b87623f6f"
 }
