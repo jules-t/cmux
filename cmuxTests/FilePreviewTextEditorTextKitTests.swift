@@ -91,6 +91,65 @@ struct FilePreviewTextEditorTextKitTests {
         #expect(ruler.clipsToBounds)
     }
 
+    /// Every gutter label is positioned from the client's *current* scroll offset, so the
+    /// whole gutter goes stale the moment the view scrolls. AppKit only invalidates the
+    /// newly exposed strip of a ruler — correct for evenly spaced hash marks, wrong here,
+    /// because the retained pixels were drawn for the previous offset. The user-visible
+    /// result when scrolling back up is numbers that vanish, and numbers sliced in half at
+    /// the strip boundary.
+    ///
+    /// The invariant that rules that out: what the gutter draws depends only on what is on
+    /// screen, never on which sub-rect AppKit asked it to refresh. So a paint of a 20pt
+    /// strip must put down exactly the same ink as a paint of the full gutter.
+    @Test("line number gutter draws the same labels whatever sub-rect it is asked to refresh")
+    func lineNumberGutterDrawingIgnoresDirtyRect() async throws {
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 480, height: 320))
+        let textView = SavingTextView.makeFilePreviewTextView()
+        textView.string = (1 ... 400).map { "line \($0)" }.joined(separator: "\n")
+        scrollView.documentView = textView
+        textView.configureLineNumberRuler(in: scrollView, enabled: true)
+        scrollView.layoutSubtreeIfNeeded()
+        defer { textView.configureLineNumberRuler(in: scrollView, enabled: false) }
+
+        let ruler = try #require(scrollView.verticalRulerView as? FilePreviewLineNumberRulerView)
+        try #require(ruler.bounds.width > 0)
+        try #require(ruler.bounds.height > 80)
+
+        // `refreshLineNumbers()` indexes the source off the main actor, so the gutter knows
+        // about line 1 alone until that lands. Wait for a full-gutter paint to carry more
+        // than a single label before asserting anything about partial paints.
+        let fullGutterInk = try await ruler.pollForLoadedLineMap()
+        #expect(fullGutterInk > 200)
+
+        let topStrip = NSRect(x: 0, y: 0, width: ruler.bounds.width, height: 20)
+        #expect(ruler.inkPixelCount(refreshing: topStrip) == fullGutterInk)
+    }
+
+    /// A scroll changes every label's position, so the gutter has to repaint in full. AppKit
+    /// will not do that on its own — nothing in the ruler observes the clip view — which is
+    /// the other half of the stale-pixel bug above.
+    @Test("line number gutter invalidates itself when the editor scrolls")
+    func lineNumberGutterInvalidatesOnScroll() throws {
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 480, height: 320))
+        let textView = SavingTextView.makeFilePreviewTextView()
+        textView.string = (1 ... 400).map { "line \($0)" }.joined(separator: "\n")
+        scrollView.documentView = textView
+        textView.configureLineNumberRuler(in: scrollView, enabled: true)
+        scrollView.layoutSubtreeIfNeeded()
+        defer { textView.configureLineNumberRuler(in: scrollView, enabled: false) }
+
+        let ruler = try #require(scrollView.verticalRulerView as? FilePreviewLineNumberRulerView)
+        let clipView = scrollView.contentView
+        clipView.scroll(to: NSPoint(x: 0, y: 600))
+        scrollView.reflectScrolledClipView(clipView)
+        ruler.needsDisplay = false
+
+        clipView.scroll(to: NSPoint(x: 0, y: 200))
+        scrollView.reflectScrolledClipView(clipView)
+
+        #expect(ruler.needsDisplay)
+    }
+
     @Test("find commands route to the focused text file preview")
     func findCommandsRouteToFocusedTextFilePreview() throws {
         let fileURL = FileManager.default.temporaryDirectory
@@ -522,5 +581,55 @@ private final class FindActionRecordingTextView: NSTextView {
             return
         }
         actions.append(action)
+    }
+}
+
+@MainActor
+private extension FilePreviewLineNumberRulerView {
+    /// Paints the gutter into an offscreen bitmap, telling it `dirtyRect` needs refreshing,
+    /// and returns how many pixels it inked. Comparing two counts is what lets the test talk
+    /// about *what was drawn* without depending on where any individual label lands.
+    func inkPixelCount(refreshing dirtyRect: NSRect) -> Int {
+        guard let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(bounds.width.rounded()),
+            pixelsHigh: Int(bounds.height.rounded()),
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ), let context = NSGraphicsContext(bitmapImageRep: bitmap) else { return 0 }
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        NSColor.clear.setFill()
+        NSRect(origin: .zero, size: bounds.size).fill(using: .copy)
+        drawHashMarksAndLabels(in: dirtyRect)
+        context.flushGraphics()
+        NSGraphicsContext.restoreGraphicsState()
+
+        var inked = 0
+        for y in 0 ..< bitmap.pixelsHigh {
+            for x in 0 ..< bitmap.pixelsWide
+                where (bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.05 {
+                inked += 1
+            }
+        }
+        return inked
+    }
+
+    /// Waits for the off-main-actor line indexing to land, and returns the ink count of a
+    /// full-gutter paint once it has. Detected by that paint carrying more than the single
+    /// label an empty line map can produce.
+    func pollForLoadedLineMap() async throws -> Int {
+        for _ in 0 ..< 200 {
+            let inked = inkPixelCount(refreshing: bounds)
+            if inked > 200 { return inked }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        return inkPixelCount(refreshing: bounds)
     }
 }
