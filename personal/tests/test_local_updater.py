@@ -4,6 +4,7 @@ import fcntl
 import json
 import os
 import pathlib
+import plistlib
 import shutil
 import sys
 import tempfile
@@ -322,10 +323,10 @@ class LocalUpdaterTests(unittest.TestCase):
             request_json.assert_not_called()
 
     def test_manual_runs_always_contact_github(self) -> None:
+        tag = "personal-v0.64.22-r2"
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
-            config_path, _, staged_app = self._stage(root, "personal-v0.64.22-r2")
-            shutil.rmtree(staged_app)
+            config_path, destination, _ = self._stage(root, tag)
             write_json(
                 root / ".local/share/cmux-personal/check.json",
                 {"schema_version": 1, "last_checked_at": utc_now()},
@@ -335,23 +336,70 @@ class LocalUpdaterTests(unittest.TestCase):
                 mock.patch.object(
                     sys,
                     "argv",
-                    ["local_updater.py", "--config", str(config_path), "--check-only"],
+                    ["local_updater.py", "--config", str(config_path)],
                 ),
                 mock.patch(
                     "personal.local_updater.request_json",
                     return_value=[
                         {
-                            "tag_name": "personal-v0.64.22-r2",
+                            "tag_name": tag,
                             "draft": False,
                             "prerelease": False,
                             "assets": [],
                         }
                     ],
                 ) as request_json,
+                mock.patch("personal.local_updater.inspect_bundle"),
+                mock.patch("personal.local_updater.is_running", return_value=False),
+                mock.patch("personal.local_updater.notify"),
             ):
                 self.assertEqual(main(), 0)
 
             request_json.assert_called_once()
+            self.assertEqual((destination / "marker").read_text(encoding="utf-8"), tag)
+
+    def test_scheduled_tick_does_not_replace_a_newer_installed_release(self) -> None:
+        staged_tag = "personal-v0.64.22-r1"
+        installed_tag = "personal-v0.64.22-r2"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            config_path, destination, staged_app = self._stage(root, staged_tag)
+            contents = destination / "Contents"
+            contents.mkdir(parents=True)
+            (destination / "marker").write_text(installed_tag, encoding="utf-8")
+            with (contents / "Info.plist").open("wb") as handle:
+                plistlib.dump(
+                    {
+                        "CFBundleIdentifier": "com.cmuxterm.app.staging.personal",
+                        "CMUXPersonalReleaseTag": installed_tag,
+                    },
+                    handle,
+                )
+            write_json(
+                root / ".local/share/cmux-personal/check.json",
+                {"schema_version": 1, "last_checked_at": utc_now()},
+            )
+
+            with (
+                mock.patch.dict(os.environ, {"HOME": temporary}),
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    ["local_updater.py", "--config", str(config_path), "--scheduled"],
+                ),
+                mock.patch("personal.local_updater.request_json") as request_json,
+                mock.patch("personal.local_updater.inspect_bundle"),
+                mock.patch("personal.local_updater.is_running", return_value=False),
+                mock.patch("personal.local_updater.notify"),
+            ):
+                self.assertEqual(main(), 0)
+
+            request_json.assert_not_called()
+            self.assertEqual(
+                (destination / "marker").read_text(encoding="utf-8"),
+                installed_tag,
+            )
+            self.assertTrue(staged_app.is_dir())
 
     def test_staged_bundle_is_ignored_when_its_metadata_does_not_match(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
