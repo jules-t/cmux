@@ -4,17 +4,21 @@ import fcntl
 import json
 import os
 import pathlib
+import shutil
 import sys
 import tempfile
 import unittest
 from unittest import mock
 
-from personal.common import ControlError
+from personal.common import ControlError, utc_now, write_json
 from personal.local_updater import (
     installation_status,
     main,
+    read_staged,
     release_key,
     select_release,
+    should_discover,
+    staged_bundle_path,
     validate_install_destination,
 )
 
@@ -191,22 +195,209 @@ class LocalUpdaterTests(unittest.TestCase):
                 mock.patch("personal.local_updater.validate_zip_paths"),
                 mock.patch("personal.local_updater.subprocess.run"),
                 mock.patch("personal.local_updater.inspect_bundle"),
-                mock.patch("personal.local_updater.install_app") as install_app,
+                mock.patch("personal.local_updater.stage_app") as stage_app,
+                mock.patch("personal.local_updater.install_staged_app") as install_staged_app,
                 mock.patch("personal.local_updater.notify"),
             ):
                 self.assertEqual(main(), 0)
 
+            destination = root / "Applications" / "cmux Personal.app"
             self.assertEqual(
-                install_app.call_args.kwargs["destination"],
-                root / "Applications" / "cmux Personal.app",
+                install_staged_app.call_args.kwargs["destination"],
+                destination,
             )
+            self.assertEqual(
+                stage_app.call_args.kwargs["staged_app"],
+                staged_bundle_path(destination),
+            )
+
+    def _stage(self, root: pathlib.Path, tag: str) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path]:
+        config_path = root / "config.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "fork_repository": "jules-t/cmux",
+                    "upstream_repository": "manaflow-ai/cmux",
+                    "app_name": "cmux Personal",
+                    "bundle_identifier": "com.cmuxterm.app.staging.personal",
+                    "artifact_name": "cmux-personal-macos-arm64.zip",
+                    "manifest_name": "cmux-personal-manifest.json",
+                    "install_path": "~/Applications/cmux Personal.app",
+                    "allowed_attestation_workflows": [
+                        "jules-t/cmux/.github/workflows/personal-build.yml"
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        destination = root / "Applications" / "cmux Personal.app"
+        staged_app = staged_bundle_path(destination)
+        staged_app.mkdir(parents=True)
+        (staged_app / "marker").write_text(tag, encoding="utf-8")
+        write_json(
+            root / ".local/share/cmux-personal/staged.json",
+            {
+                "schema_version": 1,
+                "personal_tag": tag,
+                "source_sha": "b" * 40,
+                "base_tag": "v0.64.20",
+                "staged_at": "2026-08-04T00:00:00Z",
+                "staged_path": str(staged_app),
+            },
+        )
+        return config_path, destination, staged_app
+
+    def test_staged_update_installs_without_network_once_the_app_closes(self) -> None:
+        tag = "personal-v0.64.22-r2"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            config_path, destination, staged_app = self._stage(root, tag)
+            with (
+                mock.patch.dict(os.environ, {"HOME": temporary}),
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    ["local_updater.py", "--config", str(config_path), "--scheduled"],
+                ),
+                mock.patch("personal.local_updater.request_json") as request_json,
+                mock.patch("personal.local_updater.inspect_bundle"),
+                mock.patch("personal.local_updater.is_running", return_value=False),
+                mock.patch("personal.local_updater.notify"),
+            ):
+                self.assertEqual(main(), 0)
+
+            request_json.assert_not_called()
+            self.assertEqual((destination / "marker").read_text(encoding="utf-8"), tag)
+            self.assertFalse(staged_app.exists())
+            self.assertFalse((root / ".local/share/cmux-personal/staged.json").exists())
+            state = json.loads(
+                (root / ".local/share/cmux-personal/current.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(state["personal_tag"], tag)
+
+    def test_staged_update_is_kept_while_the_app_is_open(self) -> None:
+        tag = "personal-v0.64.22-r2"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            config_path, destination, staged_app = self._stage(root, tag)
+            release = {"tag_name": tag, "draft": False, "prerelease": False, "assets": []}
+            with (
+                mock.patch.dict(os.environ, {"HOME": temporary}),
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    ["local_updater.py", "--config", str(config_path), "--scheduled"],
+                ),
+                mock.patch("personal.local_updater.request_json", return_value=[release]),
+                mock.patch("personal.local_updater.inspect_bundle"),
+                mock.patch("personal.local_updater.is_running", return_value=True),
+                mock.patch("personal.local_updater.notify"),
+            ):
+                self.assertEqual(main(), 0)
+
+            self.assertTrue(staged_app.is_dir())
+            self.assertFalse(destination.exists())
+
+    def test_scheduled_tick_skips_github_until_the_discovery_interval_elapses(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            config_path, _, staged_app = self._stage(root, "personal-v0.64.22-r2")
+            shutil.rmtree(staged_app)
+            write_json(
+                root / ".local/share/cmux-personal/check.json",
+                {"schema_version": 1, "last_checked_at": utc_now()},
+            )
+            with (
+                mock.patch.dict(os.environ, {"HOME": temporary}),
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    ["local_updater.py", "--config", str(config_path), "--scheduled"],
+                ),
+                mock.patch("personal.local_updater.request_json") as request_json,
+                mock.patch("personal.local_updater.is_running", return_value=True),
+            ):
+                self.assertEqual(main(), 0)
+
+            request_json.assert_not_called()
+
+    def test_manual_runs_always_contact_github(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            config_path, _, staged_app = self._stage(root, "personal-v0.64.22-r2")
+            shutil.rmtree(staged_app)
+            write_json(
+                root / ".local/share/cmux-personal/check.json",
+                {"schema_version": 1, "last_checked_at": utc_now()},
+            )
+            with (
+                mock.patch.dict(os.environ, {"HOME": temporary}),
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    ["local_updater.py", "--config", str(config_path), "--check-only"],
+                ),
+                mock.patch(
+                    "personal.local_updater.request_json",
+                    return_value=[
+                        {
+                            "tag_name": "personal-v0.64.22-r2",
+                            "draft": False,
+                            "prerelease": False,
+                            "assets": [],
+                        }
+                    ],
+                ) as request_json,
+            ):
+                self.assertEqual(main(), 0)
+
+            request_json.assert_called_once()
+
+    def test_staged_bundle_is_ignored_when_its_metadata_does_not_match(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            _, destination, staged_app = self._stage(root, "personal-v0.64.22-r2")
+            staged_state_path = root / ".local/share/cmux-personal/staged.json"
+            self.assertTrue(read_staged(staged_state_path, staged_app))
+
+            write_json(
+                staged_state_path,
+                {
+                    "schema_version": 1,
+                    "personal_tag": "personal-v0.64.22-r2",
+                    "source_sha": "b" * 40,
+                    "base_tag": "v0.64.20",
+                    "staged_at": "2026-08-04T00:00:00Z",
+                    "staged_path": str(destination.parent / "somewhere-else.app"),
+                },
+            )
+            self.assertFalse(read_staged(staged_state_path, staged_app))
+
+    def test_discovery_is_due_again_once_the_interval_elapses(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            check_path = pathlib.Path(temporary) / "check.json"
+            self.assertTrue(should_discover(check_path, interval_seconds=60))
+
+            write_json(check_path, {"schema_version": 1, "last_checked_at": utc_now()})
+            self.assertFalse(should_discover(check_path, interval_seconds=60))
+            self.assertTrue(should_discover(check_path, interval_seconds=0))
+
+            write_json(check_path, {"schema_version": 1, "last_checked_at": "not a timestamp"})
+            self.assertTrue(should_discover(check_path, interval_seconds=60))
 
     def test_lock_is_released_after_failure_with_retained_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             config_path = root / "config.json"
             config_path.write_text(
-                json.dumps({"fork_repository": "jules-t/cmux"}),
+                json.dumps(
+                    {
+                        "fork_repository": "jules-t/cmux",
+                        "upstream_repository": "manaflow-ai/cmux",
+                        "bundle_identifier": "com.cmuxterm.app.staging.personal",
+                        "install_path": "~/Applications/cmux Personal.app",
+                    }
+                ),
                 encoding="utf-8",
             )
             with (

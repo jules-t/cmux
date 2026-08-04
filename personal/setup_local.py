@@ -107,6 +107,7 @@ def main() -> int:
             "personal.local_updater",
             "--config",
             str(destination / "config.json"),
+            "--scheduled",
         ],
         "WorkingDirectory": str(destination),
         "EnvironmentVariables": {
@@ -125,7 +126,10 @@ def main() -> int:
             )
         },
         "RunAtLoad": True,
-        "StartInterval": 21600,
+        # Ticks are cheap: a tick only contacts GitHub once per discovery interval, and
+        # otherwise just checks whether a staged update can be swapped in. Polling this
+        # often is what makes quitting the app enough to pick up a new release.
+        "StartInterval": 120,
         "ProcessType": "Background",
         "LowPriorityIO": True,
         "StandardOutPath": str(logs / "updater.log"),
