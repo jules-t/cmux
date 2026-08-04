@@ -19,6 +19,10 @@ final class FilePreviewLineNumberRulerView: NSRulerView {
         super.init(scrollView: scrollView, orientation: .verticalRuler)
         clientView = textView
         wantsLayer = true
+        // macOS 14+ defaults clipsToBounds to false and passes draw(_:) dirty rects that
+        // extend beyond the view bounds, letting the separator paint over the file-path
+        // header above the scroll view.
+        clipsToBounds = true
         ruleThickness = Self.minimumThickness
         refreshLineNumbers()
     }
