@@ -10,6 +10,7 @@ final class FilePreviewLineNumberRulerView: NSRulerView {
     private var separatorColor = NSColor.separatorColor
     private var refreshGeneration = 0
     private var pendingRefreshTask: Task<Void, Never>?
+    private var clipBoundsObserver: NSObjectProtocol?
 
     override var isFlipped: Bool {
         true
@@ -24,6 +25,7 @@ final class FilePreviewLineNumberRulerView: NSRulerView {
         // header above the scroll view.
         clipsToBounds = true
         ruleThickness = Self.minimumThickness
+        observeScrolling(in: scrollView)
         refreshLineNumbers()
     }
 
@@ -34,6 +36,9 @@ final class FilePreviewLineNumberRulerView: NSRulerView {
 
     deinit {
         pendingRefreshTask?.cancel()
+        if let clipBoundsObserver {
+            NotificationCenter.default.removeObserver(clipBoundsObserver)
+        }
     }
 
     func configureAppearance(
@@ -92,12 +97,35 @@ final class FilePreviewLineNumberRulerView: NSRulerView {
         refreshGeneration &+= 1
     }
 
-    override func drawHashMarksAndLabels(in rect: NSRect) {
+    /// A scroll moves every label, so the whole gutter has to be repainted. AppKit only
+    /// invalidates the strip of a ruler that just came into view — the right call for evenly
+    /// spaced hash marks, which sit at fixed positions, and the wrong one here, where the
+    /// retained pixels were drawn against the previous scroll offset. Left alone that shows
+    /// up as numbers missing from the gutter and numbers clipped in half at the strip edge.
+    private func observeScrolling(in scrollView: NSScrollView) {
+        let clipView = scrollView.contentView
+        clipView.postsBoundsChangedNotifications = true
+        clipBoundsObserver = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification,
+            object: clipView,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.needsDisplay = true
+            }
+        }
+    }
+
+    /// Deliberately ignores the dirty rect and redraws the entire gutter: the labels it puts
+    /// down are a function of the current scroll offset, so a partial repaint would leave
+    /// the untouched region holding labels from an older offset. Repainting in full costs
+    /// one label per visible line — a few dozen — so there is nothing to save here.
+    override func drawHashMarksAndLabels(in _: NSRect) {
         guard let textView = clientView as? SavingTextView,
               let layoutManager = textView.layoutManager,
               let textContainer = textView.textContainer else { return }
 
-        drawSeparator(in: rect)
+        drawSeparator()
 
         let visibleRect = textView.visibleRect
         let textContainerOrigin = textView.textContainerOrigin
@@ -131,7 +159,7 @@ final class FilePreviewLineNumberRulerView: NSRulerView {
                 width: max(0, ruleThickness - 12),
                 height: ceil(labelHeight)
             )
-            guard labelRect.intersects(rect) else { continue }
+            guard labelRect.intersects(bounds) else { continue }
             (String(lineIndex + 1) as NSString).draw(in: labelRect, withAttributes: attributes)
         }
     }
@@ -168,13 +196,13 @@ final class FilePreviewLineNumberRulerView: NSRulerView {
         return extraFragmentRect.isEmpty ? nil : extraFragmentRect
     }
 
-    private func drawSeparator(in rect: NSRect) {
+    private func drawSeparator() {
         separatorColor.setFill()
         NSRect(
             x: ruleThickness - 1,
-            y: rect.minY,
+            y: bounds.minY,
             width: 1,
-            height: rect.height
+            height: bounds.height
         ).fill()
     }
 }
