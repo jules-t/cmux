@@ -426,10 +426,6 @@ def should_discover(check_path: pathlib.Path, *, interval_seconds: int) -> bool:
     return age < 0 or age >= interval_seconds
 
 
-def record_discovery(check_path: pathlib.Path) -> None:
-    write_json(check_path, {"schema_version": 1, "last_checked_at": utc_now()})
-
-
 def install_state(state_path: pathlib.Path) -> dict[str, Any]:
     if not state_path.is_file():
         return {}
@@ -440,11 +436,14 @@ def install_state(state_path: pathlib.Path) -> dict[str, Any]:
     return value
 
 
-def build_installed_state(
+def record_installation(
     tag: str,
     details: dict[str, Any],
+    *,
+    state_path: pathlib.Path,
+    staged_state_path: pathlib.Path,
     install_path: pathlib.Path,
-) -> dict[str, Any]:
+) -> None:
     state = {
         "schema_version": 1,
         "personal_tag": tag,
@@ -455,18 +454,7 @@ def build_installed_state(
     }
     if details.get("upstream_main_sha"):
         state["upstream_main_sha"] = details["upstream_main_sha"]
-    return state
-
-
-def record_installation(
-    tag: str,
-    details: dict[str, Any],
-    *,
-    state_path: pathlib.Path,
-    staged_state_path: pathlib.Path,
-    install_path: pathlib.Path,
-) -> None:
-    write_json(state_path, build_installed_state(tag, details, install_path))
+    write_json(state_path, state)
     if staged_state_path.exists():
         staged_state_path.unlink()
     notify("cmux Personal updated", f"Installed {tag}. It will be used the next time you open it.")
@@ -663,7 +651,7 @@ def _main(resources: contextlib.ExitStack) -> int:
             return 0
         # Recorded before the request so a failing GitHub call backs off for a full
         # interval instead of retrying on every tick.
-        record_discovery(check_path)
+        write_json(check_path, {"schema_version": 1, "last_checked_at": utc_now()})
 
     repository = str(config["fork_repository"])
     releases = request_json(f"https://api.github.com/repos/{repository}/releases?per_page=30")

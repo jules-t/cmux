@@ -26,6 +26,31 @@ from personal.local_updater import (
 
 
 class LocalUpdaterTests(unittest.TestCase):
+    def _write_config(
+        self,
+        root: pathlib.Path,
+        *,
+        archive_name: str = "cmux-personal-macos-arm64.zip",
+        manifest_name: str = "cmux-personal-manifest.json",
+    ) -> pathlib.Path:
+        config_path = root / "config.json"
+        write_json(
+            config_path,
+            {
+                "fork_repository": "jules-t/cmux",
+                "upstream_repository": "manaflow-ai/cmux",
+                "app_name": "cmux Personal",
+                "bundle_identifier": "com.cmuxterm.app.staging.personal",
+                "artifact_name": archive_name,
+                "manifest_name": manifest_name,
+                "install_path": "~/Applications/cmux Personal.app",
+                "allowed_attestation_workflows": [
+                    "jules-t/cmux/.github/workflows/personal-build.yml"
+                ],
+            },
+        )
+        return config_path
+
     def test_selects_highest_personal_version_and_revision(self) -> None:
         releases = [
             {"tag_name": "v0.99.0", "draft": False, "prerelease": False},
@@ -129,23 +154,10 @@ class LocalUpdaterTests(unittest.TestCase):
         manifest_name = "cmux-personal-manifest.json"
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
-            config_path = root / "config.json"
-            config_path.write_text(
-                json.dumps(
-                    {
-                        "fork_repository": "jules-t/cmux",
-                        "upstream_repository": "manaflow-ai/cmux",
-                        "app_name": "cmux Personal",
-                        "bundle_identifier": "com.cmuxterm.app.staging.personal",
-                        "artifact_name": archive_name,
-                        "manifest_name": manifest_name,
-                        "install_path": "~/Applications/cmux Personal.app",
-                        "allowed_attestation_workflows": [
-                            "jules-t/cmux/.github/workflows/personal-build.yml"
-                        ],
-                    }
-                ),
-                encoding="utf-8",
+            config_path = self._write_config(
+                root,
+                archive_name=archive_name,
+                manifest_name=manifest_name,
             )
             release = {
                 "tag_name": tag,
@@ -214,24 +226,7 @@ class LocalUpdaterTests(unittest.TestCase):
             )
 
     def _stage(self, root: pathlib.Path, tag: str) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path]:
-        config_path = root / "config.json"
-        config_path.write_text(
-            json.dumps(
-                {
-                    "fork_repository": "jules-t/cmux",
-                    "upstream_repository": "manaflow-ai/cmux",
-                    "app_name": "cmux Personal",
-                    "bundle_identifier": "com.cmuxterm.app.staging.personal",
-                    "artifact_name": "cmux-personal-macos-arm64.zip",
-                    "manifest_name": "cmux-personal-manifest.json",
-                    "install_path": "~/Applications/cmux Personal.app",
-                    "allowed_attestation_workflows": [
-                        "jules-t/cmux/.github/workflows/personal-build.yml"
-                    ],
-                }
-            ),
-            encoding="utf-8",
-        )
+        config_path = self._write_config(root)
         destination = root / "Applications" / "cmux Personal.app"
         staged_app = staged_bundle_path(destination)
         staged_app.mkdir(parents=True)
@@ -503,32 +498,16 @@ class LocalUpdaterTests(unittest.TestCase):
 
             write_json(check_path, {"schema_version": 1, "last_checked_at": "not a timestamp"})
             self.assertTrue(should_discover(check_path, interval_seconds=60))
-
-    def test_discovery_is_due_when_last_checked_timestamp_has_no_timezone(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            check_path = pathlib.Path(temporary) / "check.json"
             write_json(
                 check_path,
                 {"schema_version": 1, "last_checked_at": "2026-08-04T00:00:00"},
             )
-
             self.assertTrue(should_discover(check_path, interval_seconds=60))
 
     def test_lock_is_released_after_failure_with_retained_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
-            config_path = root / "config.json"
-            config_path.write_text(
-                json.dumps(
-                    {
-                        "fork_repository": "jules-t/cmux",
-                        "upstream_repository": "manaflow-ai/cmux",
-                        "bundle_identifier": "com.cmuxterm.app.staging.personal",
-                        "install_path": "~/Applications/cmux Personal.app",
-                    }
-                ),
-                encoding="utf-8",
-            )
+            config_path = self._write_config(root)
             with (
                 mock.patch.dict(os.environ, {"HOME": temporary}),
                 mock.patch.object(
