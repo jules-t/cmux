@@ -142,12 +142,12 @@ struct FilePreviewTextEditorTextKitTests {
         let clipView = scrollView.contentView
         clipView.scroll(to: NSPoint(x: 0, y: 600))
         scrollView.reflectScrolledClipView(clipView)
-        ruler.needsDisplay = false
+        let generationBeforeSecondScroll = ruler.viewportInvalidationGeneration
 
         clipView.scroll(to: NSPoint(x: 0, y: 200))
         scrollView.reflectScrolledClipView(clipView)
 
-        #expect(ruler.needsDisplay)
+        #expect(ruler.viewportInvalidationGeneration > generationBeforeSecondScroll)
     }
 
     @Test("find commands route to the focused text file preview")

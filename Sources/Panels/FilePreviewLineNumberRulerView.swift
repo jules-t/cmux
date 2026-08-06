@@ -11,6 +11,7 @@ final class FilePreviewLineNumberRulerView: NSRulerView {
     private var refreshGeneration = 0
     private var pendingRefreshTask: Task<Void, Never>?
     private var clipBoundsObserver: NSObjectProtocol?
+    private(set) var viewportInvalidationGeneration = 0
 
     override var isFlipped: Bool {
         true
@@ -111,9 +112,14 @@ final class FilePreviewLineNumberRulerView: NSRulerView {
             queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.needsDisplay = true
+                self?.invalidateForViewportChange()
             }
         }
+    }
+
+    private func invalidateForViewportChange() {
+        viewportInvalidationGeneration &+= 1
+        setNeedsDisplay(bounds)
     }
 
     /// Deliberately ignores the dirty rect and redraws the entire gutter: the labels it puts
