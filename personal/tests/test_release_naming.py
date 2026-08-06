@@ -20,6 +20,16 @@ class ReleaseNamingTests(unittest.TestCase):
             ("personal-v0.64.20-r4", 4),
         )
 
+    def test_unpublished_draft_also_occupies_a_revision(self) -> None:
+        self.assertEqual(
+            next_personal_tag(
+                ["personal-v0.64.20-r2"],
+                "v0.64.20",
+                existing_release_tags=["personal-v0.64.20-r3"],
+            ),
+            ("personal-v0.64.20-r4", 4),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -154,7 +154,7 @@ class StateManagerTests(unittest.TestCase):
     def test_exact_claim_cannot_be_reassigned_to_another_build_run(self) -> None:
         state = initial_state()
         claim(state)
-        with self.assertRaisesRegex(ControlError, "belongs to workflow run 123"):
+        with self.assertRaisesRegex(ControlError, "belongs to publication run 123"):
             claim(state, run_id="456")
 
     def test_releasing_a_claim_clears_it_for_the_next_attempt(self) -> None:
@@ -191,7 +191,7 @@ class StateManagerTests(unittest.TestCase):
     def test_a_run_cannot_release_another_runs_claim(self) -> None:
         state = initial_state()
         claim(state)
-        with self.assertRaisesRegex(ControlError, "belongs to workflow run 123"):
+        with self.assertRaisesRegex(ControlError, "belongs to publication run 123"):
             release_publication_claim(
                 state,
                 base_tag="v0.64.20",

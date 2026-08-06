@@ -37,7 +37,7 @@ def require_source_sha(value: object, *, context: str) -> str:
 
 def require_run_id(value: object, *, context: str) -> str:
     if not isinstance(value, str) or not RUN_ID_RE.fullmatch(value):
-        raise ControlError(f"{context} is not a positive workflow run ID")
+        raise ControlError(f"{context} must be a positive numeric identifier")
     return value
 
 
@@ -81,7 +81,7 @@ def claimed_identity(
     personal_tag_key(personal_tag, base_tag)
     run_id = require_run_id(
         claim.get("workflow_run_id"),
-        context="persisted publication claim workflow run ID",
+        context="persisted publication claim run ID",
     )
     return base_tag, personal_tag, source_sha, run_id
 
@@ -175,7 +175,7 @@ def claim_publication(
     run_id: str | None,
     updated_at: str,
 ) -> None:
-    run_id = require_run_id(run_id, context="publication claim workflow run ID")
+    run_id = require_run_id(run_id, context="publication claim run ID")
     validate_promotion(
         state,
         base_tag=base_tag,
@@ -199,7 +199,7 @@ def claim_publication(
     ):
         if claim is not None and claim[3] != run_id:
             raise ControlError(
-                f"publication claim for {personal_tag} belongs to workflow run {claim[3]}"
+                f"publication claim for {personal_tag} belongs to publication run {claim[3]}"
             )
         return
     state["publication_claim"] = {
@@ -219,7 +219,7 @@ def release_publication_claim(
     source_sha: str,
     run_id: str | None,
 ) -> bool:
-    run_id = require_run_id(run_id, context="publication workflow run ID")
+    run_id = require_run_id(run_id, context="publication run ID")
     claim = claimed_identity(state)
     if claim is None:
         return False
@@ -234,7 +234,7 @@ def release_publication_claim(
         )
     if claim[3] != run_id:
         raise ControlError(
-            f"publication claim for {personal_tag} belongs to workflow run {claim[3]}"
+            f"publication claim for {personal_tag} belongs to publication run {claim[3]}"
         )
     state["publication_claim"] = None
     return True
@@ -251,7 +251,7 @@ def finalize_publication(
     updated_at: str,
     upstream_main_sha: str | None = None,
 ) -> None:
-    run_id = require_run_id(run_id, context="publication workflow run ID")
+    run_id = require_run_id(run_id, context="publication run ID")
     validate_promotion(
         state,
         base_tag=base_tag,
@@ -280,7 +280,7 @@ def finalize_publication(
         and claim[3] != run_id
     ):
         raise ControlError(
-            f"publication claim for {personal_tag} belongs to workflow run {claim[3]}"
+            f"publication claim for {personal_tag} belongs to publication run {claim[3]}"
         )
     if not identity_is_exact(
         claim,

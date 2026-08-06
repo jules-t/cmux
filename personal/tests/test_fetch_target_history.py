@@ -36,6 +36,7 @@ class FetchTargetHistoryTests(unittest.TestCase):
             (source / "tracked.txt").write_text("base\n", encoding="utf-8")
             git(source, "add", "tracked.txt")
             git(source, "commit", "-m", "base")
+            base_blob = git(source, "rev-parse", "HEAD:tracked.txt")
             git(source, "tag", "source-tag")
             (source / "tracked.txt").write_text("target\n", encoding="utf-8")
             git(source, "commit", "-am", "target")
@@ -70,6 +71,13 @@ class FetchTargetHistoryTests(unittest.TestCase):
             self.assertEqual(git(checkout, "rev-parse", "--is-shallow-repository"), "false")
             self.assertEqual(git(checkout, "rev-list", "--count", "HEAD"), "2")
             self.assertEqual(git(checkout, "tag", "--list"), "")
+            historical_blob = subprocess.run(
+                ["git", "-C", str(checkout), "cat-file", "-e", base_blob],
+                env={**os.environ, "GIT_NO_LAZY_FETCH": "1"},
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            self.assertEqual(historical_blob.returncode, 0)
             self.assertEqual(
                 git(checkout, "branch", "--remotes", "--list", "origin/unrelated"),
                 "",

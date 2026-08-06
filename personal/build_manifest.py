@@ -12,6 +12,9 @@ from personal.common import ControlError, load_json, utc_now, write_json
 
 
 SOURCE_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+NIGHTLY_RUNTIME_ASSET_RE = re.compile(
+    r"^cmuxd-remote-manifest-[1-9][0-9]+\.json$"
+)
 
 
 def sha256(path: pathlib.Path) -> str:
@@ -30,6 +33,7 @@ def main() -> int:
     parser.add_argument("--base-tag", required=True)
     parser.add_argument("--personal-tag", required=True)
     parser.add_argument("--upstream-main-sha", default="")
+    parser.add_argument("--runtime-manifest-asset", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--checksum-output", required=True)
     args = parser.parse_args()
@@ -39,10 +43,21 @@ def main() -> int:
     if not archive.is_file():
         raise ControlError(f"archive not found: {archive}")
     digest = sha256(archive)
+    if not SOURCE_SHA_RE.fullmatch(args.source_sha):
+        raise ControlError("source SHA is not a full lowercase commit SHA")
     if args.upstream_main_sha and not SOURCE_SHA_RE.fullmatch(args.upstream_main_sha):
         raise ControlError("upstream main SHA is not a full lowercase commit SHA")
+    if args.upstream_main_sha:
+        if not NIGHTLY_RUNTIME_ASSET_RE.fullmatch(args.runtime_manifest_asset):
+            raise ControlError("main build runtime manifest asset is not immutable")
+    elif args.runtime_manifest_asset != "cmuxd-remote-manifest.json":
+        raise ControlError("stable build runtime manifest asset is not canonical")
     manifest = {
         "schema_version": 1,
+        "build_origin": (
+            os.environ.get("CMUX_PERSONAL_BUILD_ORIGIN")
+            or ("github_actions" if os.environ.get("GITHUB_ACTIONS") == "true" else "local")
+        ),
         "repository": config["fork_repository"],
         "upstream_repository": config["upstream_repository"],
         "app_name": config["app_name"],
@@ -54,6 +69,7 @@ def main() -> int:
         "source_sha": args.source_sha,
         "base_tag": args.base_tag,
         "personal_tag": args.personal_tag,
+        "runtime_manifest_asset": args.runtime_manifest_asset,
         "workflow": os.environ.get("GITHUB_WORKFLOW_REF"),
         "workflow_run_id": os.environ.get("GITHUB_RUN_ID"),
         "workflow_run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),

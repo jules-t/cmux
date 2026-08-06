@@ -660,6 +660,23 @@ def _main(resources: contextlib.ExitStack) -> int:
     release = select_release(releases, args.tag)
     tag = str(release["tag_name"])
 
+    # A locally validated build can be installed before its matching GitHub
+    # release is published. Never let release discovery turn that intentional
+    # lead into a downgrade while publication catches up or is retried.
+    installed_tag = existing_bundle_tag(destination, bundle_identifier)
+    if (
+        not args.tag
+        and installed_tag is not None
+        and release_key(installed_tag) > release_key(tag)
+    ):
+        if staged:
+            discard_staged(staged_state_path, staged_app)
+        if not args.scheduled:
+            print(
+                f"cmux Personal {installed_tag} is newer than published release {tag}"
+            )
+        return 0
+
     verified_current, state_tag, bundle_tag, status_detail = installation_status(
         destination=destination,
         state=install_state(state_path),
@@ -735,11 +752,33 @@ def _main(resources: contextlib.ExitStack) -> int:
         checksum_fields = checksum_path.read_text(encoding="utf-8").strip().split()
         if checksum_fields != [digest, archive_name]:
             raise ControlError("checksum asset does not match the archive")
-        verify_attestation(
-            archive,
-            repository=repository,
-            allowed_workflows=list(config["allowed_attestation_workflows"]),
-        )
+        build_origin = manifest.get("build_origin")
+        if build_origin == "local":
+            if any(
+                manifest.get(field) is not None
+                for field in ("workflow", "workflow_run_id", "workflow_run_attempt")
+            ):
+                raise ControlError(
+                    "local release manifest unexpectedly declares a GitHub build run"
+                )
+        elif build_origin in {None, "github_actions"}:
+            # Releases created before the local-first migration retain their
+            # GitHub build-provenance requirement.
+            legacy_workflows = config.get(
+                "legacy_attestation_workflows",
+                config.get("allowed_attestation_workflows", []),
+            )
+            if not isinstance(legacy_workflows, list) or not all(
+                isinstance(workflow, str) for workflow in legacy_workflows
+            ):
+                raise ControlError("legacy attestation workflow configuration is invalid")
+            verify_attestation(
+                archive,
+                repository=repository,
+                allowed_workflows=legacy_workflows,
+            )
+        else:
+            raise ControlError(f"unsupported release build origin: {build_origin!r}")
         validate_zip_paths(archive)
 
         extracted = root / "extracted"

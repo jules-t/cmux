@@ -53,11 +53,11 @@ jq -r '
    else "conflicted paths: none" end)
 ' "$REPORT"
 
-# Mirror the pipeline's own verdict: a clean replay dispatches directly, an
+# Mirror the local pipeline's verdict: a clean replay builds directly, an
 # agent-eligible conflict goes to the resolver, anything else stops promotion.
 STATUS="$(jq -r '.status' "$REPORT")"
 if [[ "$STATUS" == "clean" ]]; then
-  echo "verdict: promotion would dispatch a build directly"
+  echo "verdict: the local candidate can build directly"
 elif [[ "$(jq -r '.eligible_for_agent // false' "$REPORT")" == "true" ]]; then
   echo "verdict: promotion would go through the conflict resolver and review gate"
 else

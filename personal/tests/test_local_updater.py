@@ -183,6 +183,10 @@ class LocalUpdaterTests(unittest.TestCase):
                                 "archive_sha256": digest,
                                 "source_sha": "a" * 40,
                                 "base_tag": "v0.64.20",
+                                "build_origin": "local",
+                                "workflow": None,
+                                "workflow_run_id": None,
+                                "workflow_run_attempt": None,
                             }
                         ),
                         encoding="utf-8",
@@ -205,7 +209,7 @@ class LocalUpdaterTests(unittest.TestCase):
                 mock.patch("personal.local_updater.request_json", return_value=[release]),
                 mock.patch("personal.local_updater.download", side_effect=fake_download),
                 mock.patch("personal.local_updater.sha256", return_value=digest),
-                mock.patch("personal.local_updater.verify_attestation"),
+                mock.patch("personal.local_updater.verify_attestation") as verify_attestation,
                 mock.patch("personal.local_updater.validate_zip_paths"),
                 mock.patch("personal.local_updater.subprocess.run"),
                 mock.patch("personal.local_updater.inspect_bundle"),
@@ -224,6 +228,7 @@ class LocalUpdaterTests(unittest.TestCase):
                 stage_app.call_args.kwargs["staged_app"],
                 staged_bundle_path(destination),
             )
+            verify_attestation.assert_not_called()
 
     def _stage(self, root: pathlib.Path, tag: str) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path]:
         config_path = self._write_config(root)
@@ -396,6 +401,45 @@ class LocalUpdaterTests(unittest.TestCase):
                 installed_tag,
             )
             self.assertTrue(staged_app.is_dir())
+
+    def test_release_discovery_does_not_downgrade_a_newer_local_build(self) -> None:
+        installed_tag = "personal-v0.64.22-r3"
+        published_tag = "personal-v0.64.22-r2"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            config_path = self._write_config(root)
+            destination = root / "Applications" / "cmux Personal.app"
+            contents = destination / "Contents"
+            contents.mkdir(parents=True)
+            with (contents / "Info.plist").open("wb") as handle:
+                plistlib.dump(
+                    {
+                        "CFBundleIdentifier": "com.cmuxterm.app.staging.personal",
+                        "CMUXPersonalReleaseTag": installed_tag,
+                    },
+                    handle,
+                )
+            release = {
+                "tag_name": published_tag,
+                "draft": False,
+                "prerelease": False,
+                "assets": [],
+            }
+            with (
+                mock.patch.dict(os.environ, {"HOME": temporary}),
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    ["local_updater.py", "--config", str(config_path)],
+                ),
+                mock.patch(
+                    "personal.local_updater.request_json", return_value=[release]
+                ),
+                mock.patch("personal.local_updater.download") as download,
+            ):
+                self.assertEqual(main(), 0)
+
+            download.assert_not_called()
 
     def test_staged_bundle_is_ignored_when_its_metadata_does_not_match(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

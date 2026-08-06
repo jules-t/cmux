@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 10 ]]; then
-  echo "usage: $0 <source-root> <control-root> <dist-root> <derived-data> <source-sha> <base-tag> <personal-tag> <ghostty-helper> <remote-daemon-manifest> <upstream-main-sha>" >&2
+if [[ $# -ne 11 ]]; then
+  echo "usage: $0 <source-root> <control-root> <dist-root> <derived-data> <source-sha> <base-tag> <personal-tag> <ghostty-helper> <remote-daemon-manifest> <upstream-main-sha> <runtime-manifest-asset>" >&2
   exit 2
 fi
 
@@ -17,6 +17,7 @@ PERSONAL_TAG="$7"
 GHOSTTY_HELPER_SOURCE="$(cd "$(dirname "$8")" && pwd)/$(basename "$8")"
 REMOTE_DAEMON_MANIFEST="$(cd "$(dirname "$9")" && pwd)/$(basename "$9")"
 UPSTREAM_MAIN_SHA="${10}"
+RUNTIME_MANIFEST_ASSET="${11}"
 CONFIG="$CONTROL_ROOT/personal/config.json"
 export PYTHONPATH="$CONTROL_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
@@ -119,6 +120,7 @@ fi
 mkdir -p "$PRESERVED_ROOT"
 ditto "$BUILT_APP" "$PRESERVED_APP"
 
+echo "Unit tests will briefly open the temporary cmux DEV test host."
 CMUX_XCODEBUILD_NONINTERACTIVE_IDLE_TIMEOUT_SECONDS=1800 \
 CMUX_XCODEBUILD_NONINTERACTIVE_POST_TEST_TIMEOUT_SECONDS=180 \
 CMUX_APP_HOST_XCODEBUILD_ATTEMPTS=2 \
@@ -132,6 +134,7 @@ GITHUB_WORKSPACE="$SOURCE_ROOT" \
   -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
   -disableAutomaticPackageResolution \
   -destination "platform=macOS" \
+  -parallel-testing-enabled NO \
   CMUX_SKIP_ZIG_BUILD=1 \
   ARCHS=arm64 \
   ONLY_ACTIVE_ARCH=YES \
@@ -192,10 +195,41 @@ SDK_VERSION="$(otool -l "$APP_BINARY" | awk '/LC_BUILD_VERSION/ { in_version=1; 
 [[ "$SDK_VERSION" == 26.* ]]
 CMUX_CLI_BIN="$CLI_BINARY" python3 tests/test_cli_version_memory_guard.py
 ./scripts/verify-app-bundle-licenses.sh "$PERSONAL_APP"
+
+# A running installed copy watches for duplicate launches with its bundle ID and
+# terminates them. Smoke a disposable, re-signed copy with an isolated identity
+# so validation never requires quitting the user's current cmux session. The
+# archive below still contains the original, already-verified personal identity.
+SMOKE_ROOT="$(mktemp -d "${RUNNER_TEMP:-/tmp}/cmux-personal-app-smoke.XXXXXX")"
+cleanup_smoke_root() {
+  rm -rf "$SMOKE_ROOT"
+}
+trap cleanup_smoke_root EXIT
+SMOKE_APP="$SMOKE_ROOT/$APP_NAME Smoke.app"
+SMOKE_BUNDLE_ID="${BUNDLE_ID}.smoke.$$.${RANDOM}"
+ditto "$PERSONAL_APP" "$SMOKE_APP"
+/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $SMOKE_BUNDLE_ID" \
+  "$SMOKE_APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleName $APP_NAME Smoke" \
+  "$SMOKE_APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $APP_NAME Smoke" \
+  "$SMOKE_APP/Contents/Info.plist"
+xattr -cr "$SMOKE_APP"
+/usr/bin/codesign \
+  --force \
+  --deep \
+  --sign - \
+  --timestamp=none \
+  --generate-entitlement-der \
+  "$SMOKE_APP"
+/usr/bin/codesign --verify --deep --strict "$SMOKE_APP"
+
 CMUX_SMOKE_ALLOW_UNSUPPORTED_GUI=1 CMUX_SMOKE_DEBUG_LOGS=1 \
-  ./scripts/smoke-launch-macos-app.sh "$PERSONAL_APP"
+  ./scripts/smoke-launch-macos-app.sh "$SMOKE_APP"
 CMUX_SMOKE_DIRECT_EXEC=1 CMUX_SMOKE_DEBUG_LOGS=1 \
-  ./scripts/smoke-launch-macos-app.sh "$PERSONAL_APP"
+  ./scripts/smoke-launch-macos-app.sh "$SMOKE_APP"
+cleanup_smoke_root
+trap - EXIT
 
 ARCHIVE="$DIST_ROOT/$ARCHIVE_NAME"
 if [[ -e "$ARCHIVE" ]]; then
@@ -213,6 +247,7 @@ python3 "$CONTROL_ROOT/personal/build_manifest.py" \
   --base-tag "$BASE_TAG" \
   --personal-tag "$PERSONAL_TAG" \
   --upstream-main-sha "$UPSTREAM_MAIN_SHA" \
+  --runtime-manifest-asset "$RUNTIME_MANIFEST_ASSET" \
   --output "$DIST_ROOT/$MANIFEST_NAME" \
   --checksum-output "$DIST_ROOT/$ARCHIVE_NAME.sha256"
 

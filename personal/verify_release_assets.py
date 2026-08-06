@@ -13,6 +13,9 @@ from personal.official_runtime_manifest import validate_official_runtime_manifes
 
 
 SOURCE_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+NIGHTLY_RUNTIME_ASSET_RE = re.compile(
+    r"^cmuxd-remote-manifest-([1-9][0-9]+)\.json$"
+)
 
 
 def sha256(path: pathlib.Path) -> str:
@@ -49,6 +52,7 @@ def verify_archive_bundle(
     base_tag: str,
     personal_tag: str,
     upstream_main_sha: str | None = None,
+    runtime_manifest_asset: str | None = None,
 ) -> None:
     app_root = f"{config['app_name']}.app/Contents"
     plist_member = f"{app_root}/Info.plist"
@@ -98,11 +102,20 @@ def verify_archive_bundle(
                 ) from exc
             if not isinstance(runtime_manifest, dict):
                 raise ControlError("app archive remote runtime manifest is not an object")
+            runtime_build = None
+            if upstream_main_sha and runtime_manifest_asset:
+                match = NIGHTLY_RUNTIME_ASSET_RE.fullmatch(runtime_manifest_asset)
+                if not match:
+                    raise ControlError(
+                        "main app archive does not name an immutable runtime manifest"
+                    )
+                runtime_build = match.group(1)
             validate_official_runtime_manifest(
                 runtime_manifest,
                 repository=str(config["upstream_repository"]),
                 base_tag=base_tag,
                 channel="nightly" if upstream_main_sha else "stable",
+                runtime_build=runtime_build,
             )
 
             binaries = [
@@ -153,6 +166,16 @@ def verify_assets(
             raise ControlError(
                 f"manifest {key} is {manifest.get(key)!r}, expected {value!r}"
             )
+    build_origin = manifest.get("build_origin")
+    if build_origin not in {None, "local", "github_actions"}:
+        raise ControlError(f"release manifest build origin is invalid: {build_origin!r}")
+    if build_origin == "local" and any(
+        manifest.get(field) is not None
+        for field in ("workflow", "workflow_run_id", "workflow_run_attempt")
+    ):
+        raise ControlError(
+            "local release manifest unexpectedly declares a GitHub build run"
+        )
     if upstream_main_sha:
         if not SOURCE_SHA_RE.fullmatch(upstream_main_sha):
             raise ControlError("upstream main SHA is not a full lowercase commit SHA")
@@ -162,6 +185,19 @@ def verify_assets(
             )
     elif manifest.get("upstream_main_sha") is not None:
         raise ControlError("stable release manifest unexpectedly declares an upstream main SHA")
+    runtime_manifest_asset = manifest.get("runtime_manifest_asset")
+    if runtime_manifest_asset is not None:
+        if upstream_main_sha:
+            if not isinstance(runtime_manifest_asset, str) or not NIGHTLY_RUNTIME_ASSET_RE.fullmatch(
+                runtime_manifest_asset
+            ):
+                raise ControlError(
+                    "release manifest does not name an immutable nightly runtime"
+                )
+        elif runtime_manifest_asset != "cmuxd-remote-manifest.json":
+            raise ControlError(
+                "stable release manifest does not name the canonical runtime"
+            )
     digest = sha256(archive)
     if manifest.get("archive_sha256") != digest:
         raise ControlError("archive digest does not match the manifest")
@@ -177,6 +213,9 @@ def verify_assets(
         base_tag=base_tag,
         personal_tag=personal_tag,
         upstream_main_sha=upstream_main_sha,
+        runtime_manifest_asset=(
+            str(runtime_manifest_asset) if runtime_manifest_asset is not None else None
+        ),
     )
     return manifest
 

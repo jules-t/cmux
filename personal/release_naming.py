@@ -11,13 +11,19 @@ from personal.common import (
     run,
     write_json,
 )
+from personal.release_publisher import list_releases, require_repository
 
 
-def next_personal_tag(existing_tags: list[str], base_tag: str) -> tuple[str, int]:
+def next_personal_tag(
+    existing_tags: list[str],
+    base_tag: str,
+    *,
+    existing_release_tags: list[str] | None = None,
+) -> tuple[str, int]:
     require_release_tag(base_tag)
     prefix = f"personal-{base_tag}-r"
     revisions = []
-    for tag in existing_tags:
+    for tag in [*existing_tags, *(existing_release_tags or [])]:
         match = PERSONAL_TAG_RE.fullmatch(tag)
         if match and tag.startswith(prefix):
             revisions.append(int(match.group(4)))
@@ -30,6 +36,7 @@ def main() -> int:
     parser.add_argument("--repo", required=True)
     parser.add_argument("--base-tag", required=True)
     parser.add_argument("--remote", default="origin")
+    parser.add_argument("--repository", required=True)
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
@@ -52,7 +59,17 @@ def main() -> int:
         if reference.endswith("^{}"):
             continue
         tags.append(reference.removeprefix("refs/tags/"))
-    tag, revision = next_personal_tag(tags, base_tag)
+    repository = require_repository(args.repository)
+    release_tags = [
+        tag
+        for release in list_releases(repository)
+        if isinstance((tag := release.get("tag_name")), str)
+    ]
+    tag, revision = next_personal_tag(
+        tags,
+        base_tag,
+        existing_release_tags=release_tags,
+    )
     value = {"personal_tag": tag, "revision": revision, "base_tag": base_tag}
     write_json(args.output, value)
     append_github_output(value)

@@ -63,3 +63,17 @@ class BuildScriptTests(unittest.TestCase):
             '--archs "arm64"',
             script,
         )
+
+    def test_launch_smoke_uses_a_disposable_unique_identity(self) -> None:
+        script = self._script()
+
+        self.assertIn('SMOKE_BUNDLE_ID="${BUNDLE_ID}.smoke.$$.${RANDOM}"', script)
+        self.assertIn("Set :CFBundleIdentifier $SMOKE_BUNDLE_ID", script)
+        self.assertEqual(
+            script.count('./scripts/smoke-launch-macos-app.sh "$SMOKE_APP"'),
+            2,
+        )
+        self.assertNotIn(
+            './scripts/smoke-launch-macos-app.sh "$PERSONAL_APP"',
+            script,
+        )

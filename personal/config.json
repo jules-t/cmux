@@ -15,7 +15,7 @@
   "runner": "macos-26",
   "architecture": "arm64",
   "observations_required": 2,
-  "allowed_attestation_workflows": [
+  "legacy_attestation_workflows": [
     "jules-t/cmux/.github/workflows/personal-build.yml"
   ]
 }
