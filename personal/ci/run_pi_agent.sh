@@ -46,7 +46,7 @@ if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
   echo "DEEPSEEK_API_KEY is required" >&2
   exit 1
 fi
-for command_name in docker realpath; do
+for command_name in docker git realpath; do
   command -v "$command_name" >/dev/null || {
     echo "required command is unavailable: $command_name" >&2
     exit 1
@@ -80,6 +80,40 @@ if [[ "$PROFILE" == "resolver" ]]; then
   WORKSPACE_MOUNT="type=bind,source=$WORKSPACE_ROOT,target=/workspace"
 else
   WORKSPACE_MOUNT="type=bind,source=$WORKSPACE_ROOT,target=/workspace,readonly"
+fi
+
+# Shared clones keep objects in a host-side cache and record that cache's
+# absolute path in .git/objects/info/alternates. Mount each referenced object
+# directory at the same absolute path so Git can use the cache in the sandbox
+# without granting the agent write access to it.
+ALTERNATE_MOUNTS=()
+if ALTERNATES_FILE="$(
+  git -C "$WORKING_ROOT" rev-parse \
+    --path-format=absolute \
+    --git-path objects/info/alternates 2>/dev/null
+)" && [[ -f "$ALTERNATES_FILE" ]]; then
+  GIT_OBJECTS_DIRECTORY="$(dirname "$(dirname "$ALTERNATES_FILE")")"
+  while IFS= read -r alternate_objects || [[ -n "$alternate_objects" ]]; do
+    if [[ -z "$alternate_objects" ]]; then
+      continue
+    fi
+    if [[ "$alternate_objects" != /* ]]; then
+      alternate_objects="$GIT_OBJECTS_DIRECTORY/$alternate_objects"
+    fi
+    if [[ ! -d "$alternate_objects" ]]; then
+      echo "Git alternate object directory is unavailable: $alternate_objects" >&2
+      exit 1
+    fi
+    alternate_objects="$(realpath "$alternate_objects")"
+    if [[ "$alternate_objects" == *,* ]]; then
+      echo "Git alternate object directory cannot contain a comma: $alternate_objects" >&2
+      exit 1
+    fi
+    ALTERNATE_MOUNTS+=(
+      --mount
+      "type=bind,source=$alternate_objects,target=$alternate_objects,readonly"
+    )
+  done < "$ALTERNATES_FILE"
 fi
 
 OUTPUT_MOUNT=()
@@ -118,6 +152,7 @@ printf '%s' "$DEEPSEEK_API_KEY" |
     --tmpfs /tmp:rw,nosuid,nodev,mode=1777 \
     --mount "type=bind,source=$CONTROL_ROOT,target=/control,readonly" \
     --mount "$WORKSPACE_MOUNT" \
+    "${ALTERNATE_MOUNTS[@]}" \
     "${OUTPUT_MOUNT[@]}" \
     --env CI=true \
     --env GIT_EDITOR=true \
