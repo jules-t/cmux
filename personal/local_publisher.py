@@ -83,6 +83,67 @@ def remote_branch_sha(repository: pathlib.Path, branch: str) -> str | None:
     return lines[0][0]
 
 
+def remote_personal_tag_sha(
+    repository: pathlib.Path,
+    personal_tag: str,
+) -> str | None:
+    direct_ref = f"refs/tags/{personal_tag}"
+    peeled_ref = f"{direct_ref}^{{}}"
+    result = run(
+        ["git", "ls-remote", "--tags", "origin", direct_ref, peeled_ref],
+        cwd=repository,
+    )
+    references: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) != 2 or fields[1] not in {direct_ref, peeled_ref}:
+            raise ControlError(f"GitHub returned an ambiguous {personal_tag} tag")
+        previous = references.setdefault(fields[1], fields[0])
+        if previous != fields[0]:
+            raise ControlError(f"GitHub returned an ambiguous {personal_tag} tag")
+    return references.get(peeled_ref) or references.get(direct_ref)
+
+
+def ensure_remote_personal_tag(
+    candidate_repository: pathlib.Path,
+    *,
+    personal_tag: str,
+    source_sha: str,
+) -> None:
+    existing = remote_personal_tag_sha(candidate_repository, personal_tag)
+    if existing is not None:
+        if existing != source_sha:
+            raise ControlError(
+                f"release tag {personal_tag} points to {existing}, expected {source_sha}"
+            )
+        return
+
+    push_error: ControlError | None = None
+    try:
+        run(
+            [
+                "git",
+                "-c",
+                "credential.helper=!gh auth git-credential",
+                "push",
+                "origin",
+                f"{source_sha}:refs/tags/{personal_tag}",
+            ],
+            cwd=candidate_repository,
+        )
+    except ControlError as exc:
+        push_error = exc
+
+    observed = remote_personal_tag_sha(candidate_repository, personal_tag)
+    if observed != source_sha:
+        detail = f"found {observed}" if observed else "tag is missing"
+        if push_error is not None:
+            detail = f"{detail}; push reported: {push_error}"
+        raise ControlError(
+            f"release tag {personal_tag} was not created at {source_sha}: {detail}"
+        )
+
+
 def publication_run_id(source_sha: str) -> str:
     """Return a stable numeric claim ID so retries of one receipt are idempotent."""
     return str(int(source_sha, 16))
@@ -242,6 +303,11 @@ def publish_validated_receipt(
             candidate_branch=str(candidate["candidate_branch"]),
             expected_commit=source_sha,
             github_auth=True,
+        )
+        ensure_remote_personal_tag(
+            candidate_repository,
+            personal_tag=personal_tag,
+            source_sha=source_sha,
         )
 
         def claim(state: dict[str, Any]) -> None:
