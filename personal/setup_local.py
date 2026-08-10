@@ -255,7 +255,14 @@ def main() -> int:
         "WorkingDirectory": str(monitor_control),
         "EnvironmentVariables": {"PATH": environment_path},
         "RunAtLoad": True,
-        "StartInterval": 6 * 60 * 60,
+        # Calendar schedules are coalesced into one run after a sleeping Mac wakes;
+        # StartInterval silently loses every tick that occurs while it is asleep.
+        "StartCalendarInterval": [
+            {"Hour": 0, "Minute": 0},
+            {"Hour": 6, "Minute": 0},
+            {"Hour": 12, "Minute": 0},
+            {"Hour": 18, "Minute": 0},
+        ],
         "ProcessType": "Background",
         "LowPriorityIO": True,
         "StandardOutPath": str(logs / "monitor.log"),

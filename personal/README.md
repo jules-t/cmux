@@ -24,7 +24,7 @@ successful local build that is still installed on the machine.
 - Apple Silicon Mac
 - Xcode 26.x installed under `/Applications` and opened once
 - GitHub CLI authenticated with `gh auth login`
-- Docker Desktop, OrbStack, or another running Docker-compatible engine
+- Docker Desktop, OrbStack, or another Docker-compatible engine
 - A DeepSeek API key stored in macOS Keychain
 
 Store the DeepSeek key without placing it in a shell profile:
@@ -41,8 +41,12 @@ uv run --no-project python personal/setup_local.py \
   --config personal/config.json
 ```
 
-The monitor checks upstream every six hours. The updater continues checking for
-published personal releases and completes a staged install after the app closes.
+The monitor checks upstream at six-hour calendar intervals and catches up once
+after the Mac wakes. If conflict resolution needs Docker Desktop during a
+scheduled run, the monitor starts it and waits for it to become ready; other
+Docker-compatible engines must already be running. The updater continues
+checking for published personal releases and completes a staged install after
+the app closes.
 The scheduled monitor runs from a self-contained copy under
 `~/.local/share/cmux-personal/monitor-control` so macOS does not block it from
 reading a repository under `Documents`. Rerun the setup command after changing

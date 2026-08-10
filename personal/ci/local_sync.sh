@@ -114,17 +114,11 @@ load_deepseek_key() {
 }
 
 require_pi_sandbox() {
-  command -v docker >/dev/null || {
-    echo "Docker or an equivalent Docker-compatible runtime is required for Pi" >&2
-    return 1
-  }
-  if ! docker info >/dev/null 2>&1; then
-    echo "the Docker-compatible runtime is installed but is not running" >&2
-    return 1
+  sandbox_arguments=(--control-root "$CONTROL_ROOT")
+  if [[ "$SCHEDULED" == "true" ]]; then
+    sandbox_arguments+=(--scheduled)
   fi
-  if ! docker image inspect cmux-personal-pi-runner:0.83.0 >/dev/null 2>&1; then
-    "$CONTROL_ROOT/personal/ci/setup_pi.sh" "$CONTROL_ROOT"
-  fi
+  "$CONTROL_ROOT/personal/ci/ensure_pi_sandbox.sh" "${sandbox_arguments[@]}"
 }
 
 if [[ "$CHECK_ONLY" == "true" ]]; then

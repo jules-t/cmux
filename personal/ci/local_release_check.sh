@@ -225,6 +225,7 @@ PYTHONPATH="$CONTROL_ROOT" python3 "$CONTROL_ROOT/personal/release_naming.py" \
   --base-tag "$BASE_TAG" \
   --remote "$ORIGIN_URL" \
   --repository "$FORK_REPOSITORY" \
+  --local-build-root "$OUTPUT_ROOT/runs" \
   --output "$METADATA/release-name.json"
 PERSONAL_TAG="$(jq -er '.personal_tag' "$METADATA/release-name.json")"
 

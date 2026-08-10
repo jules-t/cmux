@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import pathlib
 
 from personal.common import (
     ControlError,
     PERSONAL_TAG_RE,
     append_github_output,
+    load_json,
     require_release_tag,
     run,
     write_json,
@@ -19,16 +21,37 @@ def next_personal_tag(
     base_tag: str,
     *,
     existing_release_tags: list[str] | None = None,
+    existing_local_tags: list[str] | None = None,
 ) -> tuple[str, int]:
     require_release_tag(base_tag)
     prefix = f"personal-{base_tag}-r"
     revisions = []
-    for tag in [*existing_tags, *(existing_release_tags or [])]:
+    for tag in [
+        *existing_tags,
+        *(existing_release_tags or []),
+        *(existing_local_tags or []),
+    ]:
         match = PERSONAL_TAG_RE.fullmatch(tag)
         if match and tag.startswith(prefix):
             revisions.append(int(match.group(4)))
     revision = max(revisions, default=0) + 1
     return f"{prefix}{revision}", revision
+
+
+def local_personal_tags(build_runs_root: pathlib.Path) -> list[str]:
+    if not build_runs_root.exists():
+        return []
+    if not build_runs_root.is_dir():
+        raise ControlError(f"local build runs root is not a directory: {build_runs_root}")
+
+    tags: list[str] = []
+    for record in sorted(build_runs_root.glob("*/metadata/release-name.json")):
+        value = load_json(record)
+        tag = value.get("personal_tag")
+        if not isinstance(tag, str) or not PERSONAL_TAG_RE.fullmatch(tag):
+            raise ControlError(f"invalid personal tag in local build record: {record}")
+        tags.append(tag)
+    return tags
 
 
 def main() -> int:
@@ -37,6 +60,7 @@ def main() -> int:
     parser.add_argument("--base-tag", required=True)
     parser.add_argument("--remote", default="origin")
     parser.add_argument("--repository", required=True)
+    parser.add_argument("--local-build-root")
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
@@ -65,10 +89,16 @@ def main() -> int:
         for release in list_releases(repository)
         if isinstance((tag := release.get("tag_name")), str)
     ]
+    local_tags = (
+        local_personal_tags(pathlib.Path(args.local_build_root))
+        if args.local_build_root
+        else []
+    )
     tag, revision = next_personal_tag(
         tags,
         base_tag,
         existing_release_tags=release_tags,
+        existing_local_tags=local_tags,
     )
     value = {"personal_tag": tag, "revision": revision, "base_tag": base_tag}
     write_json(args.output, value)
