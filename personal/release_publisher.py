@@ -27,6 +27,7 @@ from personal.verify_release_assets import verify_assets
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 GH_TIMEOUT_SECONDS = 300
+GH_UPLOAD_TIMEOUT_SECONDS = 30 * 60
 RELEASE_VISIBILITY_ATTEMPTS = 6
 RELEASE_VISIBILITY_DELAY_SECONDS = 2
 REHEARSAL_TAG_PREFIX = "personal-rehearsal-"
@@ -35,7 +36,12 @@ REHEARSAL_MAX_AGE_SECONDS = 6 * 60 * 60
 
 
 def gh(*arguments: str) -> subprocess.CompletedProcess[str]:
-    return run(["gh", *arguments], timeout=GH_TIMEOUT_SECONDS)
+    timeout = (
+        GH_UPLOAD_TIMEOUT_SECONDS
+        if arguments[:2] == ("release", "upload")
+        else GH_TIMEOUT_SECONDS
+    )
+    return run(["gh", *arguments], timeout=timeout)
 
 
 def gh_allowing_failure(*arguments: str) -> subprocess.CompletedProcess[str]:
