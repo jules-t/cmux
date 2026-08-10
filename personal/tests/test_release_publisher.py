@@ -141,6 +141,16 @@ class ReleasePublisherTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.token.stop()
 
+    def test_release_upload_uses_a_large_asset_timeout(self) -> None:
+        with mock.patch.object(
+            release_publisher,
+            "run",
+            return_value=completed(),
+        ) as command:
+            release_publisher.gh("release", "upload", PERSONAL_TAG, "app.zip")
+
+        self.assertEqual(command.call_args.kwargs["timeout"], 30 * 60)
+
     def test_reserve_creates_an_exact_empty_draft(self) -> None:
         github = GitHubStub()
 
