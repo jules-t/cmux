@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+from personal import local_publisher
 from personal.common import ControlError
 from personal.local_publisher import publication_run_id, publish_validated_receipt
 
@@ -77,6 +78,10 @@ class LocalPublisherTests(unittest.TestCase):
                     side_effect=lambda *args, **kwargs: events.append("candidate"),
                 ),
                 mock.patch(
+                    "personal.local_publisher.ensure_remote_personal_tag",
+                    side_effect=lambda *args, **kwargs: events.append("tag"),
+                ),
+                mock.patch(
                     "personal.local_publisher.mutate_remote_state",
                     side_effect=mutate,
                 ),
@@ -110,6 +115,7 @@ class LocalPublisherTests(unittest.TestCase):
                     "installed",
                     "auth",
                     "candidate",
+                    "tag",
                     "state",
                     "reserve",
                     "publish",
@@ -152,6 +158,46 @@ class LocalPublisherTests(unittest.TestCase):
         first = publication_run_id("a" * 40)
         self.assertEqual(first, publication_run_id("a" * 40))
         self.assertRegex(first, r"^[1-9][0-9]*$")
+
+    def test_missing_release_tag_is_pushed_and_verified_before_release_creation(self) -> None:
+        source_sha = "a" * 40
+        personal_tag = "personal-v0.64.23-r1"
+        missing = mock.Mock(stdout="")
+        pushed = mock.Mock(stdout="")
+        visible = mock.Mock(stdout=f"{source_sha}\trefs/tags/{personal_tag}\n")
+
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(
+            local_publisher,
+            "run",
+            side_effect=[missing, pushed, visible],
+        ) as command:
+            local_publisher.ensure_remote_personal_tag(
+                pathlib.Path(temporary),
+                personal_tag=personal_tag,
+                source_sha=source_sha,
+            )
+
+        self.assertEqual(command.call_count, 3)
+        self.assertIn(
+            f"{source_sha}:refs/tags/{personal_tag}",
+            command.call_args_list[1].args[0],
+        )
+
+    def test_existing_release_tag_must_point_to_the_validated_source(self) -> None:
+        personal_tag = "personal-v0.64.23-r1"
+        existing = mock.Mock(stdout=f"{'d' * 40}\trefs/tags/{personal_tag}\n")
+
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(
+            local_publisher,
+            "run",
+            return_value=existing,
+        ):
+            with self.assertRaisesRegex(ControlError, "points to"):
+                local_publisher.ensure_remote_personal_tag(
+                    pathlib.Path(temporary),
+                    personal_tag=personal_tag,
+                    source_sha="a" * 40,
+                )
 
 
 if __name__ == "__main__":
