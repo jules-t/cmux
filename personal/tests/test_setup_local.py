@@ -74,7 +74,16 @@ class SetupLocalTests(unittest.TestCase):
             with monitor_agent.open("rb") as handle:
                 monitor = plistlib.load(handle)
             self.assertEqual(monitor["Label"], "com.jules.cmux-personal-monitor")
-            self.assertEqual(monitor["StartInterval"], 6 * 60 * 60)
+            self.assertNotIn("StartInterval", monitor)
+            self.assertEqual(
+                monitor["StartCalendarInterval"],
+                [
+                    {"Hour": 0, "Minute": 0},
+                    {"Hour": 6, "Minute": 0},
+                    {"Hour": 12, "Minute": 0},
+                    {"Hour": 18, "Minute": 0},
+                ],
+            )
             self.assertIn("local_sync.sh", " ".join(monitor["ProgramArguments"]))
             self.assertIn("--scheduled", monitor["ProgramArguments"])
             self.assertEqual(monitor["WorkingDirectory"], str(monitor_control))
