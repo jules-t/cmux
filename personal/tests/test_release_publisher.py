@@ -89,8 +89,13 @@ class GitHubStub:
         if arguments[:3] == ("release", "create", PERSONAL_TAG):
             if self.release is not None:
                 raise ControlError("release already exists")
-            target = arguments[arguments.index("--target") + 1]
-            self.source_sha = target
+            if "--target" in arguments:
+                target = arguments[arguments.index("--target") + 1]
+                self.source_sha = target
+            else:
+                if not self.tag_exists:
+                    raise AssertionError("release creation without an existing tag")
+                target = "main"
             self.release = {
                 "id": 1,
                 "tag_name": PERSONAL_TAG,
@@ -153,6 +158,39 @@ class ReleasePublisherTests(unittest.TestCase):
         self.assertIn("--draft", create)
         self.assertEqual(create[create.index("--target") + 1], SOURCE_SHA)
         self.assertFalse(any(call[:2] == ("release", "upload") for call in github.calls))
+
+    def test_reserve_uses_an_existing_exact_tag_without_a_target_argument(self) -> None:
+        github = GitHubStub(tag_exists=True)
+
+        with mock.patch.object(release_publisher, "gh", side_effect=github):
+            release = release_publisher.reserve_release(
+                repository=REPOSITORY,
+                personal_tag=PERSONAL_TAG,
+                source_sha=SOURCE_SHA,
+                base_tag=BASE_TAG,
+            )
+
+        self.assertTrue(release["draft"])
+        create = next(call for call in github.calls if call[:2] == ("release", "create"))
+        self.assertNotIn("--target", create)
+
+    def test_exact_existing_tag_is_authoritative_for_a_draft_target(self) -> None:
+        release = draft_release()
+        release["target_commitish"] = "main"
+        github = GitHubStub(
+            release=release,
+            tag_exists=True,
+        )
+
+        with mock.patch.object(release_publisher, "gh", side_effect=github):
+            reserved = release_publisher.reserve_release(
+                repository=REPOSITORY,
+                personal_tag=PERSONAL_TAG,
+                source_sha=SOURCE_SHA,
+                base_tag=BASE_TAG,
+            )
+
+        self.assertTrue(reserved["draft"])
 
     def test_reserve_reuses_an_exact_draft_and_exercises_edit(self) -> None:
         github = GitHubStub(release=draft_release())
