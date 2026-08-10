@@ -237,16 +237,18 @@ def require_release_source(
     source_sha: str,
 ) -> None:
     if release_is_draft(release):
+        existing_tag_sha = find_tag_commit(repository, personal_tag)
+        if existing_tag_sha is not None:
+            if existing_tag_sha != source_sha:
+                raise ControlError(
+                    f"release tag {personal_tag} points to {existing_tag_sha}, "
+                    f"expected {source_sha}"
+                )
+            return
         target = release.get("target_commitish")
         if not isinstance(target, str) or target.lower() != source_sha:
             raise ControlError(
                 f"draft release {personal_tag} targets {target!r}, expected {source_sha}"
-            )
-        existing_tag_sha = find_tag_commit(repository, personal_tag)
-        if existing_tag_sha is not None and existing_tag_sha != source_sha:
-            raise ControlError(
-                f"release tag {personal_tag} points to {existing_tag_sha}, "
-                f"expected {source_sha}"
             )
         return
     last_error: ControlError | None = None
@@ -315,22 +317,29 @@ def reserve_release(
 
     release = find_release(repository, personal_tag)
     if release is None:
+        existing_tag_sha = find_tag_commit(repository, personal_tag)
+        if existing_tag_sha is not None and existing_tag_sha != source_sha:
+            raise ControlError(
+                f"release tag {personal_tag} points to {existing_tag_sha}, "
+                f"expected {source_sha}"
+            )
         creation_error: ControlError | None = None
         try:
-            gh(
+            create_arguments = [
                 "release",
                 "create",
                 personal_tag,
                 "--repo",
                 repository,
-                "--target",
-                source_sha,
                 "--title",
                 title,
                 "--notes",
                 notes,
                 "--draft",
-            )
+            ]
+            if existing_tag_sha is None:
+                create_arguments[5:5] = ["--target", source_sha]
+            gh(*create_arguments)
         except ControlError as exc:
             creation_error = exc
         release = find_release(repository, personal_tag)
