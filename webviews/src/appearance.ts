@@ -14,6 +14,10 @@ export type DiffViewerAppearance = {
   fontFamily?: string;
   fontSize?: number;
   lineHeight?: number;
+  syntaxPalette?: {
+    dark?: FilePreviewSyntaxPalette;
+    light?: FilePreviewSyntaxPalette;
+  };
   theme?: {
     dark?: string;
     light?: string;
@@ -22,6 +26,16 @@ export type DiffViewerAppearance = {
     dark?: DiffViewerTheme;
     light?: DiffViewerTheme;
   };
+};
+
+export type FilePreviewSyntaxPalette = {
+  attribute?: string;
+  comment?: string;
+  function?: string;
+  keyword?: string;
+  number?: string;
+  string?: string;
+  type?: string;
 };
 
 export type ResolvedDiffViewerAppearance = DiffViewerAppearance & {
@@ -69,6 +83,7 @@ export function resolveDiffViewerAppearance(appearance?: DiffViewerAppearance): 
     fontFamily: appearance?.fontFamily ?? "Menlo",
     fontSize: metric(appearance?.fontSize, 10),
     lineHeight: metric(appearance?.lineHeight, 20),
+    syntaxPalette: appearance?.syntaxPalette,
     theme: {
       light: appearance?.theme?.light ?? lightTheme.name ?? "cmux-ghostty-light",
       dark: appearance?.theme?.dark ?? darkTheme.name ?? "cmux-ghostty-dark",

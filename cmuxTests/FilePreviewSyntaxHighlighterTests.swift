@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 
@@ -230,5 +231,30 @@ struct FilePreviewSyntaxHighlighterTests {
                 _ = theme.color(for: kind)
             }
         }
+    }
+
+    @Test("Native themes and serialized diff palettes share the same colors")
+    func nativeAndDiffPalettesMatch() throws {
+        let cases: [(FilePreviewSyntaxTheme, FilePreviewSyntaxPalette)] = [
+            (.dark, .dark),
+            (.light, .light),
+        ]
+        for (theme, palette) in cases {
+            try expect(theme.keyword, matches: palette.keyword)
+            try expect(theme.type, matches: palette.type)
+            try expect(theme.string, matches: palette.string)
+            try expect(theme.number, matches: palette.number)
+            try expect(theme.comment, matches: palette.comment)
+            try expect(theme.function, matches: palette.function)
+            try expect(theme.attribute, matches: palette.attribute)
+            #expect(palette.jsonObject.count == 7)
+        }
+    }
+
+    private func expect(_ color: NSColor, matches components: SIMD3<UInt8>) throws {
+        let rgb = try #require(color.usingColorSpace(.sRGB))
+        #expect(abs(rgb.redComponent - CGFloat(components.x) / 255) < 0.0001)
+        #expect(abs(rgb.greenComponent - CGFloat(components.y) / 255) < 0.0001)
+        #expect(abs(rgb.blueComponent - CGFloat(components.z) / 255) < 0.0001)
     }
 }
