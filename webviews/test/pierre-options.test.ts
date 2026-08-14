@@ -44,7 +44,7 @@ test("file tree sticky overlays use a non-transparent surface", () => {
   expect(css).toContain("box-shadow: 0 1px 0 var(--trees-border-color)");
 });
 
-test("Ghostty Shiki theme maps Markdown token scopes", () => {
+test("Shiki theme maps syntax scopes to the file preview palette", () => {
   const theme = shikiThemeFromGhostty(
     {
       name: "test-dark",
@@ -70,10 +70,32 @@ test("Ghostty Shiki theme maps Markdown token scopes", () => {
         "14": "#7ee7ff",
       },
     },
-    { backgroundOpacity: 1 },
+    {
+      backgroundOpacity: 1,
+      syntaxPalette: {
+        dark: {
+          attribute: "#d9b0fc",
+          comment: "#808f9e",
+          function: "#8cc2fc",
+          keyword: "#fa78a8",
+          number: "#f2b57d",
+          string: "#99d68c",
+          type: "#66d9f0",
+        },
+      },
+    },
   );
   const scopes = theme.tokenColors.flatMap((entry) => entry.scope ?? []);
+  const foregroundFor = (scope: string) => theme.tokenColors.find((entry) => entry.scope?.includes(scope))?.settings.foreground;
 
+  expect(foregroundFor("keyword")).toBe("#fa78a8");
+  expect(foregroundFor("entity.name.type")).toBe("#66d9f0");
+  expect(foregroundFor("string")).toBe("#99d68c");
+  expect(foregroundFor("constant.numeric")).toBe("#f2b57d");
+  expect(foregroundFor("comment")).toBe("#808f9e");
+  expect(foregroundFor("entity.name.function")).toBe("#8cc2fc");
+  expect(foregroundFor("meta.annotation")).toBe("#d9b0fc");
+  expect(theme.tokenColors.find((entry) => entry.scope?.includes("comment"))?.settings.fontStyle).toBeUndefined();
   expect(scopes).toContain("markup.heading");
   expect(scopes).toContain("markup.bold");
   expect(scopes).toContain("markup.italic");

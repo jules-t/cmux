@@ -192,10 +192,22 @@ export function fileTreeUnsafeCSS(): string {
 
 export function shikiThemeFromGhostty(theme: any, appearance: DiffViewerAppearance) {
   const palette = theme.palette ?? {};
+  const filePreviewPalette = theme.type === "light" ? appearance.syntaxPalette?.light : appearance.syntaxPalette?.dark;
   const renderedBackground = appearanceBackgroundColor(theme.background, appearance);
   const contrastBackground = themeBackgroundForContrast(theme);
   const foreground = readableColor(theme.foreground, contrastBackground, theme.type === "light" ? "#000000" : "#ffffff");
   const tokenColor = (value: unknown, fallback = foreground) => readableColor(value, contrastBackground, fallback);
+  const filePreviewColor = (kind: keyof NonNullable<typeof filePreviewPalette>, fallback: string) => {
+    const value = filePreviewPalette?.[kind];
+    return typeof value === "string" && value.trim() !== "" ? value.trim() : fallback;
+  };
+  const keyword = filePreviewColor("keyword", tokenColor(palette["5"]));
+  const type = filePreviewColor("type", tokenColor(palette["6"]));
+  const string = filePreviewColor("string", tokenColor(palette["2"]));
+  const number = filePreviewColor("number", tokenColor(palette["3"]));
+  const comment = filePreviewColor("comment", tokenColor(palette["8"]));
+  const functionColor = filePreviewColor("function", tokenColor(palette["4"]));
+  const attribute = filePreviewColor("attribute", tokenColor(palette["13"], tokenColor(palette["5"])));
   return {
     name: theme.name,
     displayName: theme.ghosttyName,
@@ -229,39 +241,46 @@ export function shikiThemeFromGhostty(theme: any, appearance: DiffViewerAppearan
     },
     tokenColors: [
       { settings: { foreground, background: renderedBackground } },
-      { scope: ["comment", "punctuation.definition.comment"], settings: { foreground: tokenColor(palette["8"]), fontStyle: "italic" } },
-      { scope: ["string", "constant.other.symbol"], settings: { foreground: tokenColor(palette["2"]) } },
-      { scope: ["constant.numeric", "constant.language", "support.constant"], settings: { foreground: tokenColor(palette["3"]) } },
-      { scope: ["keyword", "storage", "storage.type"], settings: { foreground: tokenColor(palette["5"]) } },
-      { scope: ["entity.name.function", "support.function"], settings: { foreground: tokenColor(palette["4"]) } },
-      { scope: ["entity.name.type", "entity.name.class", "support.type"], settings: { foreground: tokenColor(palette["6"]) } },
+      { scope: ["comment", "punctuation.definition.comment"], settings: { foreground: comment } },
+      { scope: ["string", "constant.other.symbol"], settings: { foreground: string } },
+      { scope: ["constant.numeric", "support.constant"], settings: { foreground: number } },
+      { scope: ["keyword", "storage", "storage.type", "constant.language"], settings: { foreground: keyword } },
+      { scope: ["entity.name.function", "support.function", "variable.function"], settings: { foreground: functionColor } },
+      {
+        scope: ["entity.name.type", "entity.name.class", "entity.name.struct", "entity.name.enum", "entity.name.protocol", "support.type", "support.class"],
+        settings: { foreground: type },
+      },
+      {
+        scope: ["entity.other.attribute-name", "meta.attribute", "meta.annotation", "storage.type.annotation"],
+        settings: { foreground: attribute },
+      },
       {
         scope: ["markup.heading", "punctuation.definition.heading"],
-        settings: { foreground: tokenColor(palette["12"], tokenColor(palette["4"])), fontStyle: "bold" },
+        settings: { foreground: functionColor, fontStyle: "bold" },
       },
       {
         scope: ["markup.bold", "punctuation.definition.bold"],
-        settings: { foreground: tokenColor(palette["11"], tokenColor(palette["3"])), fontStyle: "bold" },
+        settings: { foreground: number, fontStyle: "bold" },
       },
       {
         scope: ["markup.italic", "punctuation.definition.italic"],
-        settings: { foreground: tokenColor(palette["13"], tokenColor(palette["5"])), fontStyle: "italic" },
+        settings: { foreground: attribute, fontStyle: "italic" },
       },
       {
         scope: ["markup.inline.raw", "markup.raw", "markup.fenced_code", "markup.raw.block"],
-        settings: { foreground: tokenColor(palette["10"], tokenColor(palette["2"])) },
+        settings: { foreground: string },
       },
       {
         scope: ["markup.underline.link", "string.other.link", "markup.link"],
-        settings: { foreground: tokenColor(palette["14"], tokenColor(palette["6"])) },
+        settings: { foreground: type },
       },
       {
         scope: ["markup.quote", "punctuation.definition.quote"],
-        settings: { foreground: tokenColor(palette["8"]), fontStyle: "italic" },
+        settings: { foreground: comment, fontStyle: "italic" },
       },
       {
         scope: ["markup.list", "punctuation.definition.list", "markup.table"],
-        settings: { foreground: tokenColor(palette["9"], tokenColor(palette["1"])) },
+        settings: { foreground: keyword },
       },
       { scope: ["variable", "meta.definition.variable"], settings: { foreground } },
       { scope: ["invalid", "message.error"], settings: { foreground: tokenColor(palette["9"], tokenColor(palette["1"])) } },

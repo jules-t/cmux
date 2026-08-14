@@ -1130,6 +1130,8 @@ C0DE71B10000000000000001 /* AppDelegate+AgentChatNotifications.swift in Sources 
 		F11E52270000000000006027 /* FilePreviewSyntaxHighlightSettingsFileStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006028 /* FilePreviewSyntaxHighlightSettingsFileStoreTests.swift */; };
 		F11E52270000000000006021 /* FilePreviewSyntaxKeywords.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006022 /* FilePreviewSyntaxKeywords.swift */; };
 		F11E52270000000000006017 /* FilePreviewSyntaxLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006018 /* FilePreviewSyntaxLanguage.swift */; };
+		F11E52270000000000006031 /* FilePreviewSyntaxPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006030 /* FilePreviewSyntaxPalette.swift */; };
+		F11E52270000000000006032 /* FilePreviewSyntaxPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006030 /* FilePreviewSyntaxPalette.swift */; };
 		F11E52270000000000006019 /* FilePreviewSyntaxTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006020 /* FilePreviewSyntaxTheme.swift */; };
 		F11E52270000000000006015 /* FilePreviewSyntaxToken.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006016 /* FilePreviewSyntaxToken.swift */; };
 		F11E52270000000000006009 /* FilePreviewSyntaxTokenizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11E52270000000000006010 /* FilePreviewSyntaxTokenizer.swift */; };
@@ -3825,6 +3827,7 @@ C0DE71B10000000000000002 /* AppDelegate+AgentChatNotifications.swift */ = {isa =
 		F11E52270000000000006028 /* FilePreviewSyntaxHighlightSettingsFileStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePreviewSyntaxHighlightSettingsFileStoreTests.swift; sourceTree = "<group>"; };
 		F11E52270000000000006022 /* FilePreviewSyntaxKeywords.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewSyntaxKeywords.swift; sourceTree = "<group>"; };
 		F11E52270000000000006018 /* FilePreviewSyntaxLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewSyntaxLanguage.swift; sourceTree = "<group>"; };
+		F11E52270000000000006030 /* FilePreviewSyntaxPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewSyntaxPalette.swift; sourceTree = "<group>"; };
 		F11E52270000000000006020 /* FilePreviewSyntaxTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewSyntaxTheme.swift; sourceTree = "<group>"; };
 		F11E52270000000000006016 /* FilePreviewSyntaxToken.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewSyntaxToken.swift; sourceTree = "<group>"; };
 		F11E52270000000000006010 /* FilePreviewSyntaxTokenizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels/FilePreviewSyntaxTokenizer.swift; sourceTree = "<group>"; };
@@ -6978,6 +6981,7 @@ C0DE71B10000000000000002 /* AppDelegate+AgentChatNotifications.swift */ = {isa =
 				F11E52270000000000006014 /* FilePreviewSyntaxTokenKind.swift */,
 				F11E52270000000000006016 /* FilePreviewSyntaxToken.swift */,
 				F11E52270000000000006018 /* FilePreviewSyntaxLanguage.swift */,
+				F11E52270000000000006030 /* FilePreviewSyntaxPalette.swift */,
 				F11E52270000000000006020 /* FilePreviewSyntaxTheme.swift */,
 				F11E52270000000000006022 /* FilePreviewSyntaxKeywords.swift */,
 				F11E52270000000000006024 /* FilePreviewSyntaxTypes.swift */,
@@ -9319,6 +9323,7 @@ C0DE71B10000000000000002 /* AppDelegate+AgentChatNotifications.swift */ = {isa =
 				F11E52270000000000006003 /* FilePreviewSyntaxHighlightSettings.swift in Sources */,
 				F11E52270000000000006021 /* FilePreviewSyntaxKeywords.swift in Sources */,
 				F11E52270000000000006017 /* FilePreviewSyntaxLanguage.swift in Sources */,
+				F11E52270000000000006031 /* FilePreviewSyntaxPalette.swift in Sources */,
 				F11E52270000000000006019 /* FilePreviewSyntaxTheme.swift in Sources */,
 				F11E52270000000000006015 /* FilePreviewSyntaxToken.swift in Sources */,
 				F11E52270000000000006009 /* FilePreviewSyntaxTokenizer.swift in Sources */,
@@ -10538,6 +10543,7 @@ C0DE71B10000000000000002 /* AppDelegate+AgentChatNotifications.swift */ = {isa =
 				918100000000000000000021 /* CodexTranscriptMonitorStopReplay.swift in Sources */,
 				918100000000000000000071 /* CodexTranscriptSubagentSignals.swift in Sources */,
 				FEEDC1A50000000000000001 /* FeedEventClassifier.swift in Sources */,
+				F11E52270000000000006032 /* FilePreviewSyntaxPalette.swift in Sources */,
 				C51A73B20000000000000002 /* IOSScreenshotCommandResultBox.swift in Sources */,
 				A5FB1308 /* JSONCObjectEditor+Remove.swift in Sources */,
 				A5FB1312 /* JSONCObjectEditor+Set.swift in Sources */,

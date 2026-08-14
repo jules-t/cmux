@@ -761,6 +761,10 @@ extension CMUXCLI {
                 "themes": [
                     "light": lightTheme.jsonObject,
                     "dark": darkTheme.jsonObject
+                ],
+                "syntaxPalette": [
+                    "light": FilePreviewSyntaxPalette.light.jsonObject,
+                    "dark": FilePreviewSyntaxPalette.dark.jsonObject
                 ]
             ]
         }

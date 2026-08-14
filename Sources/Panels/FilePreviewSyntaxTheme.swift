@@ -42,23 +42,26 @@ struct FilePreviewSyntaxTheme {
         prefersDark ? .dark : .light
     }
 
-    static let dark = FilePreviewSyntaxTheme(
-        keyword: NSColor(srgbRed: 0.98, green: 0.47, blue: 0.66, alpha: 1.0),
-        type: NSColor(srgbRed: 0.40, green: 0.85, blue: 0.94, alpha: 1.0),
-        string: NSColor(srgbRed: 0.60, green: 0.84, blue: 0.55, alpha: 1.0),
-        number: NSColor(srgbRed: 0.95, green: 0.71, blue: 0.49, alpha: 1.0),
-        comment: NSColor(srgbRed: 0.50, green: 0.56, blue: 0.62, alpha: 1.0),
-        function: NSColor(srgbRed: 0.55, green: 0.76, blue: 0.99, alpha: 1.0),
-        attribute: NSColor(srgbRed: 0.85, green: 0.69, blue: 0.99, alpha: 1.0)
-    )
+    static let dark = FilePreviewSyntaxTheme(palette: .dark)
 
-    static let light = FilePreviewSyntaxTheme(
-        keyword: NSColor(srgbRed: 0.66, green: 0.13, blue: 0.44, alpha: 1.0),
-        type: NSColor(srgbRed: 0.13, green: 0.42, blue: 0.55, alpha: 1.0),
-        string: NSColor(srgbRed: 0.13, green: 0.50, blue: 0.20, alpha: 1.0),
-        number: NSColor(srgbRed: 0.62, green: 0.36, blue: 0.05, alpha: 1.0),
-        comment: NSColor(srgbRed: 0.40, green: 0.46, blue: 0.52, alpha: 1.0),
-        function: NSColor(srgbRed: 0.15, green: 0.36, blue: 0.78, alpha: 1.0),
-        attribute: NSColor(srgbRed: 0.45, green: 0.27, blue: 0.66, alpha: 1.0)
-    )
+    static let light = FilePreviewSyntaxTheme(palette: .light)
+
+    private init(palette: FilePreviewSyntaxPalette) {
+        keyword = Self.color(palette.keyword)
+        type = Self.color(palette.type)
+        string = Self.color(palette.string)
+        number = Self.color(palette.number)
+        comment = Self.color(palette.comment)
+        function = Self.color(palette.function)
+        attribute = Self.color(palette.attribute)
+    }
+
+    private static func color(_ components: SIMD3<UInt8>) -> NSColor {
+        NSColor(
+            srgbRed: CGFloat(components.x) / 255,
+            green: CGFloat(components.y) / 255,
+            blue: CGFloat(components.z) / 255,
+            alpha: 1
+        )
+    }
 }
